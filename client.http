@@ -1,0 +1,149 @@
+
+# Swiss Unihockey API v2 — confirmed working endpoints
+# KD Jets club_id: 463785
+# Damen L-UPL:  league=24, game_class=21
+# Herren L-UPL: league=24, game_class=11
+
+### All seasons (dropdown; highlighted = upcoming registration season)
+GET https://api-v2.swissunihockey.ch/api/seasons
+Accept: application/json
+
+### All leagues for a season (returns league + game_class IDs)
+GET https://api-v2.swissunihockey.ch/api/leagues?season=2025&format=dropdown
+Accept: application/json
+
+### All clubs (Jets = 463785)
+GET https://api-v2.swissunihockey.ch/api/clubs
+Accept: application/json
+
+### All Jets games for a season (scores, venues, league names)
+GET https://api-v2.swissunihockey.ch/api/games?mode=club&club_id=463785&season=2025
+Accept: application/json
+
+### Full Damen L-UPL schedule for a season
+GET https://api-v2.swissunihockey.ch/api/games?mode=list&season=2025&league=24&game_class=21
+Accept: application/json
+
+### Damen L-UPL standings
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=24&game_class=21
+Accept: application/json
+
+### Herren L-UPL standings
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=24&game_class=11
+Accept: application/json
+
+### Men's L-UPL top scorers (includes player IDs; women's equivalent unknown)
+GET https://api-v2.swissunihockey.ch/api/topscorers/su?season=2025&amount=50
+Accept: application/json
+
+### Player profile by ID (position, birth year, height, club)
+GET https://api-v2.swissunihockey.ch/api/players/521510
+Accept: application/json
+
+### Player game-by-game stats (goals, assists, points, PIM per game)
+GET https://api-v2.swissunihockey.ch/api/players/521510/overview
+Accept: application/json
+
+### Game events — returns 404 for most games (requires partner access)
+GET https://api-v2.swissunihockey.ch/api/game_events?game_id=1096886
+Accept: application/json
+
+### Teams in same league as Jets for a season (returns league peers, not just Jets roster)
+GET https://api-v2.swissunihockey.ch/api/teams?club_id=463785&season=2025
+Accept: application/json
+
+
+### GET game details by game_id
+GET https://api-v2.swissunihockey.ch/api/games/1096880
+
+### get game details by game_id with lineups - KD Jets U14B,
+GET https://api-v2.swissunihockey.ch/api/games/1093736
+
+### get game details by game_id with lineups - KD Jets U14B,
+GET https://api-v2.swissunihockey.ch/api/games/1093736/summary
+
+### GET game_events by game_id 
+GET https://api-v2.swissunihockey.ch/api/game_events/1093736
+
+### GET game summary  by game_id
+GET https://api-v2.swissunihockey.ch/api/games/1096880/summary
+
+### GET game_events by game_id 
+GET https://api-v2.swissunihockey.ch/api/game_events/1096880
+
+
+###
+https://myapp.swissunihockey.ch/#/team/4239/feed
+
+### GET games, example is for Kloten-Dietlikon Jets U14B, siehe config.json
+https://api-v2.swissunihockey.ch/api/games?mode=list&season=2025&league=14&game_class=14
+
+### GET previous games for a team, example is for Kloten-Dietlikon Jets U14B, siehe config.json
+https://swissunihockey-api.azurewebsites.net/api/teamapi/getpreviousteamgames?TeamID=4239&LastGameID=0
+Authorization: Bearer 
+X-Platform: 2
+
+### U14B Gruppe 9 games via LeagueID from private API JSON — does public API share the same league namespace?
+GET https://api-v2.swissunihockey.ch/api/games?mode=list&season=2025&league=8568
+Accept: application/json
+
+### U14B Gruppe 9 standings via LeagueID 8568
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=8568
+Accept: application/json
+
+### GameID cross-check — 6-digit private API GameID against public API (expect 404 if different namespace)
+GET https://api-v2.swissunihockey.ch/api/games/105916
+Accept: application/json
+
+### get players for a team, Not available for teams that are not in NLA or NLB
+GET https://api-v2.swissunihockey.ch/api/teams/431482/players
+
+### Team statistics
+GET https://api-v2.swissunihockey.ch/api/teams/431482/statistics
+
+
+###
+GET https://api-v2.swissunihockey.ch/api/teams/visitors
+
+### get players for jets NLA women's team, 
+GET https://api-v2.swissunihockey.ch/api/teams/431166/players
+
+
+###
+GET https://api-v2.swissunihockey.ch/api/teams/431166/statistics
+
+###
+GET https://api-v2.swissunihockey.ch/api/teams/431166/statistics
+
+###
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=24&game_class=21
+
+### Rankings for Junioren D Regional (league=12, game_class=34)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=12&game_class=34
+
+### Rankings for Junioren E Regional (league=12, game_class=35)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=12&game_class=35
+
+### Rankings for Junioren U14 A (league=13, game_class=14)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=13&game_class=14
+
+### Rankings for Junioren U14 B (league=14, game_class=14)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=14&game_class=14
+
+### Rankings for Junioren U16 A (league=14, game_class=16)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=14&game_class=16
+
+### Rankings for Junioren U18 B (league=14, game_class=18)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=14&game_class=18
+
+### Rankings for Junioren U21 A (league=13, game_class=19)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=13&game_class=19
+
+### Rankings for Juniorinnen U21 A (league=13, game_class=26)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=13&game_class=26
+
+### Rankings for Juniorinnen U17 A (league=13, game_class=28)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=13&game_class=28
+
+### Rankings for Juniorinnen D Regional (league=12, game_class=44)
+GET https://api-v2.swissunihockey.ch/api/rankings?season=2025&league=12&game_class=44

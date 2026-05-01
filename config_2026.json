@@ -1,0 +1,118 @@
+{
+  "api_base_url": "https://api-v2.swissunihockey.ch",
+  "club_id": 463785,
+  "season": 2026,
+  "teams": [
+    {
+      "name": "Jets",
+      "team_id": 431166,
+      "league_id": 24,
+      "game_class": 21,
+      "league_name": "Damen L-UPL",
+      "is_junior": 0,
+      "status": "verified"
+    },
+    {
+      "name": "Jets I",
+      "team_id": 432153,
+      "league_id": 12,
+      "game_class": 34,
+      "league_name": "Junioren D Regional",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets III",
+      "team_id": 431160,
+      "league_id": 12,
+      "game_class": 34,
+      "league_name": "Junioren D Regional",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets III",
+      "team_id": 431387,
+      "league_id": 12,
+      "game_class": 35,
+      "league_name": "Junioren E Regional",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets U14A",
+      "team_id": 431310,
+      "league_id": 13,
+      "game_class": 14,
+      "league_name": "Junioren U14 A",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets U14B",
+      "team_id": 431482,
+      "league_id": 14,
+      "game_class": 14,
+      "league_name": "Junioren U14 B",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets U16B",
+      "team_id": 431155,
+      "league_id": 14,
+      "game_class": 16,
+      "league_name": "Junioren U16 A",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets U18B",
+      "team_id": 431157,
+      "league_id": 14,
+      "game_class": 18,
+      "league_name": "Junioren U18 B",
+      "is_junior": 1,
+      "status": "not_registered"
+    },
+    {
+      "name": "Jets U21A",
+      "team_id": 431158,
+      "league_id": 13,
+      "game_class": 19,
+      "league_name": "Junioren U21 A",
+      "is_junior": 1,
+      "status": "verified"
+    },
+    {
+      "name": "Jets Jun. U21A",
+      "team_id": 431170,
+      "league_id": 13,
+      "game_class": 26,
+      "league_name": "Juniorinnen U21 A",
+      "is_junior": 1,
+      "status": "verified"
+    },
+    {
+      "name": "Jets Jun. U17A",
+      "team_id": 431483,
+      "league_id": 13,
+      "game_class": 28,
+      "league_name": "Juniorinnen U17 A",
+      "is_junior": 1,
+      "status": "verified"
+    },
+    {
+      "name": "Jets Jun. D",
+      "team_id": 432155,
+      "league_id": 12,
+      "game_class": 44,
+      "league_name": "Juniorinnen D Regional",
+      "is_junior": 1,
+      "status": "not_registered"
+    }
+  ],
+  "cache_ttl_hours": 24,
+  "cache_dir": "data/cache",
+  "db_path": "data/archive/blue_yellow_archive.db"
+}
