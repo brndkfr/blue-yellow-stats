@@ -1,0 +1,34 @@
+{
+  "game_info": {
+    "game_id":           "2025-001",
+    "opponent":          "GC Zürich II",
+    "format":            2,
+    "minutes_per_period": 20,
+    "script_url":        "https://script.google.com/macros/s/DEIN_SCRIPT_ID/exec"
+  },
+  "goalies": [
+    { "nr":  1, "name": "M. Meier"  },
+    { "nr": 30, "name": "J. Weber"  }
+  ],
+  "players": [
+    { "nr":  3, "name": "L. Schmid"       },
+    { "nr":  4, "name": "N. Keller"       },
+    { "nr":  5, "name": "F. Bauer"        },
+    { "nr":  7, "name": "T. Müller"       },
+    { "nr":  8, "name": "S. Fischer"      },
+    { "nr":  9, "name": "A. Huber"        },
+    { "nr": 10, "name": "P. Wolf"         },
+    { "nr": 11, "name": "B. Schneider"    },
+    { "nr": 12, "name": "D. Koch"         },
+    { "nr": 13, "name": "R. Moser"        },
+    { "nr": 14, "name": "C. Zimmermann"   },
+    { "nr": 15, "name": "E. Steiner"      },
+    { "nr": 16, "name": "G. Brunner"      },
+    { "nr": 17, "name": "H. Lehmann"      },
+    { "nr": 19, "name": "K. Maurer"       }
+  ],
+  "reserves": [
+    { "nr": 21, "name": "V. Hofer"  },
+    { "nr": 22, "name": "W. Gerber" }
+  ]
+}

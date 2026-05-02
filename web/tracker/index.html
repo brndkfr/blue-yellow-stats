@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#030712" />
+  <title>Jets Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    button { touch-action: manipulation; }
+    .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen select-none"
+      x-data="tracker()"
+      x-init="init()">
+
+  <!-- Loading -->
+  <div x-show="loading" class="flex items-center justify-center min-h-screen">
+    <p class="text-gray-500 text-sm">Lade Kader…</p>
+  </div>
+
+  <!-- Error -->
+  <div x-show="!loading && error" class="flex items-center justify-center min-h-screen p-6">
+    <p class="text-red-400 text-sm text-center" x-text="error"></p>
+  </div>
+
+  <!-- App -->
+  <div x-show="!loading && !error" x-cloak>
+
+    <!-- ── Fixed header ── -->
+    <header class="fixed top-0 left-0 right-0 z-20 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-3 pt-3 pb-2">
+      <div class="flex items-center justify-between mb-2">
+        <div class="min-w-0">
+          <span class="font-bold text-sm truncate block" x-text="config?.game_info?.opponent"></span>
+          <span class="text-gray-500 text-xs" x-text="'ID: ' + (config?.game_info?.game_id || '—')"></span>
+        </div>
+        <button
+          @click="undo()"
+          :disabled="!lastEvent"
+          class="text-xs px-3 py-1.5 rounded-lg bg-gray-700 active:bg-gray-600 disabled:opacity-25 disabled:cursor-not-allowed flex-shrink-0 ml-2"
+        >↩ Rückgängig</button>
+      </div>
+
+      <!-- Period tabs -->
+      <div class="flex gap-1.5">
+        <template x-for="p in periods()" :key="p.n">
+          <button
+            @click="activePeriod = p.n"
+            :class="activePeriod === p.n ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'"
+            class="flex-1 text-xs py-1.5 rounded-lg font-semibold transition-colors"
+            x-text="p.label"
+          ></button>
+        </template>
+        <button
+          @click="activePeriod = 99"
+          :class="activePeriod === 99 ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400'"
+          class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
+        >OT</button>
+      </div>
+    </header>
+
+    <!-- ── Feedback toast ── -->
+    <div
+      x-show="feedback"
+      x-transition:enter="transition duration-150"
+      x-transition:enter-start="opacity-0 -translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      x-transition:leave="transition duration-300"
+      x-transition:leave-end="opacity-0"
+      class="fixed top-28 left-4 right-4 z-30 bg-green-800 text-white text-sm text-center py-2 px-4 rounded-xl shadow-xl"
+      x-text="feedback"
+    ></div>
+
+    <!-- ── Scrollable roster ── -->
+    <!-- pt-28 clears the fixed header (~112px); pb-44 clears the fixed action bar (~176px) -->
+    <main class="pt-28 pb-44 px-3 space-y-4">
+
+      <!-- Goalies -->
+      <section>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-1.5">Torhüter</p>
+        <div class="grid grid-cols-2 gap-2">
+          <template x-for="g in config?.goalies || []" :key="g.nr">
+            <button
+              @click="selectPlayer(g)"
+              :class="isActive(g)
+                ? 'ring-2 ring-yellow-400 bg-blue-900'
+                : 'bg-gray-800 active:bg-gray-700'"
+              class="flex flex-col items-center py-4 rounded-2xl transition-colors"
+            >
+              <span class="text-3xl font-black text-yellow-400 leading-none" x-text="g.nr"></span>
+              <span class="text-xs text-gray-300 mt-1" x-text="g.name"></span>
+            </button>
+          </template>
+        </div>
+      </section>
+
+      <!-- Field players -->
+      <section>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-1.5">Feldspieler</p>
+        <div class="grid grid-cols-3 gap-2">
+          <template x-for="p in config?.players || []" :key="p.nr">
+            <button
+              @click="selectPlayer(p)"
+              :class="isActive(p)
+                ? 'ring-2 ring-yellow-400 bg-blue-900'
+                : 'bg-gray-800 active:bg-gray-700'"
+              class="flex flex-col items-center py-3 rounded-2xl transition-colors"
+            >
+              <span class="text-2xl font-black text-blue-400 leading-none" x-text="p.nr"></span>
+              <span class="text-xs text-gray-300 mt-1 leading-tight text-center px-1" x-text="p.name"></span>
+            </button>
+          </template>
+        </div>
+      </section>
+
+      <!-- Reserves -->
+      <section x-show="config?.reserves?.length > 0">
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-1.5">Reserve</p>
+        <div class="grid grid-cols-2 gap-2">
+          <template x-for="r in config?.reserves || []" :key="r.nr">
+            <button
+              @click="selectPlayer(r)"
+              :class="isActive(r)
+                ? 'ring-2 ring-yellow-400 bg-blue-900'
+                : 'bg-gray-800/50 active:bg-gray-700'"
+              class="flex flex-col items-center py-3 rounded-2xl transition-colors"
+            >
+              <span class="text-xl font-black text-gray-500 leading-none" x-text="r.nr"></span>
+              <span class="text-xs text-gray-500 mt-1" x-text="r.name"></span>
+            </button>
+          </template>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ── Fixed action bar ── -->
+    <footer class="fixed bottom-0 left-0 right-0 z-20 bg-gray-900/95 backdrop-blur border-t border-gray-800 px-3 pt-2 pb-safe">
+      <!-- Active player strip -->
+      <div class="text-center h-5 mb-1.5">
+        <span
+          x-show="activePlayer"
+          class="text-yellow-400 text-xs font-semibold"
+          x-text="activePlayer ? '#' + activePlayer.nr + '  ' + activePlayer.name : ''"
+        ></span>
+        <span x-show="!activePlayer" class="text-gray-700 text-xs">— Spieler auswählen —</span>
+      </div>
+
+      <!-- 2 × 3 action grid -->
+      <div class="grid grid-cols-3 gap-2">
+        <template x-for="action in actions" :key="action.code">
+          <button
+            @click="sendAction(action.code)"
+            :disabled="!activePlayer"
+            :class="[action.bg, action.fg]"
+            class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
+                   disabled:opacity-25 disabled:cursor-not-allowed
+                   active:scale-95 transition-transform"
+          >
+            <span class="text-xl leading-none" x-text="action.icon"></span>
+            <span class="text-xs font-semibold mt-1 leading-tight" x-text="action.label"></span>
+          </button>
+        </template>
+      </div>
+    </footer>
+
+  </div><!-- /app -->
+
+  <script>
+    function tracker() {
+      return {
+        config:       null,
+        loading:      true,
+        error:        null,
+        activePeriod: 1,
+        activePlayer: null,
+        lastEvent:    null,
+        feedback:     null,
+        _feedTimer:   null,
+
+        actions: [
+          { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
+          { code: 'stop',      label: 'Abwehr',        icon: '🛡️', bg: 'bg-blue-700',   fg: 'text-white'    },
+          { code: 'key_pass',  label: 'Schlüsselpass', icon: '🔑', bg: 'bg-yellow-500', fg: 'text-gray-900' },
+          { code: 'slot_shot', label: 'Torschuss',     icon: '🎯', bg: 'bg-orange-600', fg: 'text-white'    },
+          { code: 'slot_save', label: 'Topparade',     icon: '🧤', bg: 'bg-sky-500',    fg: 'text-white'    },
+          { code: 'turnover',  label: 'Ballverlust',   icon: '⚠️', bg: 'bg-red-700',    fg: 'text-white'    },
+        ],
+
+        async init() {
+          try {
+            const res = await fetch('./kader.json');
+            if (!res.ok) throw new Error(`kader.json nicht gefunden (HTTP ${res.status})`);
+            this.config = await res.json();
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        periods() {
+          const fmt = this.config?.game_info?.format ?? 2;
+          return fmt === 3
+            ? [{ n: 1, label: '1. Drittel' }, { n: 2, label: '2. Drittel' }, { n: 3, label: '3. Drittel' }]
+            : [{ n: 1, label: '1. Hälfte'  }, { n: 2, label: '2. Hälfte'  }];
+        },
+
+        selectPlayer(player) {
+          this.activePlayer = this.isActive(player) ? null : player;
+        },
+
+        isActive(player) {
+          return this.activePlayer?.nr === player.nr;
+        },
+
+        // Formats current wall-clock time as yyyy-dd-mm_HH.MM.SS
+        formatTimestamp() {
+          const n  = new Date();
+          const p  = (v) => String(v).padStart(2, '0');
+          return `${n.getFullYear()}-${p(n.getDate())}-${p(n.getMonth()+1)}_${p(n.getHours())}.${p(n.getMinutes())}.${p(n.getSeconds())}`;
+        },
+
+        actionLabel(code) {
+          return this.actions.find(a => a.code === code)?.label ?? code;
+        },
+
+        _toast(msg) {
+          this.feedback = msg;
+          clearTimeout(this._feedTimer);
+          this._feedTimer = setTimeout(() => { this.feedback = null; }, 2200);
+        },
+
+        _post(payload) {
+          const url = this.config?.game_info?.script_url;
+          if (!url) return;
+          fetch(url, {
+            method:  'POST',
+            mode:    'no-cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body:    new URLSearchParams(payload).toString(),
+          }).catch(() => {}); // opaque response — ignore
+        },
+
+        sendAction(code) {
+          if (!this.activePlayer) return;
+          const payload = {
+            game_id:     this.config.game_info.game_id,
+            opponent:    this.config.game_info.opponent,
+            period:      this.activePeriod,
+            timestamp:   this.formatTimestamp(),
+            player_nr:   this.activePlayer.nr,
+            player_name: this.activePlayer.name,
+            action:      code,
+          };
+          this.lastEvent = { ...payload };
+          this._toast(`✓ ${this.actionLabel(code)} — #${payload.player_nr} ${payload.player_name}`);
+          this._post(payload);
+        },
+
+        undo() {
+          if (!this.lastEvent) return;
+          const payload = { ...this.lastEvent, action: `CORRECTION_${this.lastEvent.action}` };
+          this._toast('Korrektur gesendet');
+          this.lastEvent = null;
+          this._post(payload);
+        },
+      };
+    }
+  </script>
+</body>
+</html>
