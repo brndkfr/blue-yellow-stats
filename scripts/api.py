@@ -1,7 +1,9 @@
 """Shared API parsers and helpers used across the pipeline."""
 
+import hashlib
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -58,11 +60,12 @@ _SCORE_RE = re.compile(r"^(\d+):(\d+)\s+(\(.+\))$")
 
 
 def parse_game_header(data: dict) -> dict:
-    """Extract date, score, period_scores, and venue from a game detail response.
+    """Extract date, score, period_scores, venue, and cancellation from a game detail response.
 
     The header row contains: home, away, "H:A (p1,p2,p3)", date, time, venue, ...
     Score is identified by the period-breakdown parenthetical to avoid matching
     the game start time (e.g. "11:45").
+    Cancelled games show "-:-" as score and "Abgesagt" as a cell text.
     """
     result = {
         "date": None,
@@ -72,14 +75,19 @@ def parse_game_header(data: dict) -> dict:
         "venue_name": None,
         "venue_lat": None,
         "venue_lng": None,
+        "is_cancelled": 0,
     }
 
     for row in rows(data):
         cells = row.get("cells", [])
         texts = [" ".join(c.get("text", [])) for c in cells]
 
-        if not any(_DATE_RE.match(t) for t in texts):
-            continue  # not the header row
+        is_header = any(_DATE_RE.match(t) for t in texts) or "Abgesagt" in texts
+        if not is_header:
+            continue
+
+        if "Abgesagt" in texts:
+            result["is_cancelled"] = 1
 
         for t in texts:
             if _DATE_RE.match(t):
@@ -132,6 +140,19 @@ def parse_events_to_rows(game_id: int, events_data: dict) -> list:
 
     raw_rows = list(reversed(raw_rows))  # API delivers reverse-chron
 
+    # Pre-pass: detect n_periods from explicit "Beginn X. Drittel" markers
+    n_periods: int | None = None
+    for _row in raw_rows:
+        _cells = _row.get("cells", [])
+        if len(_cells) > 1:
+            _desc = " ".join(_cells[1].get("text", []))
+            if _desc.startswith("Beginn"):
+                _m = _PERIOD_N.search(_desc)
+                if _m:
+                    _p = int(_m.group(1))
+                    if n_periods is None or _p > n_periods:
+                        n_periods = _p
+
     result = []
     current_period = None
 
@@ -164,6 +185,8 @@ def parse_events_to_rows(game_id: int, events_data: dict) -> list:
             try:
                 mins = int(game_time.split(":")[0])
                 period = (mins // 20) + 1
+                if n_periods is not None:
+                    period = min(period, n_periods)
             except (ValueError, IndexError):
                 pass
 
@@ -243,3 +266,79 @@ def final_score_from_events(events_data: dict) -> str | None:
                 if m and ("orsch" in desc or "igentor" in desc):
                     return m.group(1)
     return None
+
+
+# ---------- player ID generation (internal hash, composed) -------------------
+
+def normalize_player_key(name: str) -> str:
+    """Normalize a player name to a canonical key for hashing.
+
+    Uses only the name so the internal_id is stable across seasons and teams.
+    """
+    return unicodedata.normalize("NFC", name.strip().lower()) if name else ""
+
+
+def make_internal_id(name: str) -> str:
+    """Return the first 8 hex chars of SHA256(normalized name)."""
+    key = normalize_player_key(name)
+    return hashlib.sha256(key.encode()).hexdigest()[:8]
+
+
+def make_synthetic_player_id(name: str) -> int:
+    """Return a deterministic negative player_id for juniors without a Swiss ID."""
+    key = normalize_player_key(name)
+    h = hashlib.sha256(key.encode()).digest()
+    val = int.from_bytes(h[:8], byteorder="big", signed=True)
+    # Guarantee negative; handle the (astronomically unlikely) val==0 case
+    if val >= 0:
+        val = -(val + 1)
+    return val
+
+
+def parse_period_scores_header(period_scores_json: str,
+                               score_home: int | None,
+                               score_away: int | None,
+                               n_periods: int | None = None) -> list[dict]:
+    """Parse games.period_scores into per-period goal dicts.
+
+    When n_periods is provided (detected from event markers), take exactly
+    n_periods valid slots — this handles the case where P1 achieves the final
+    score (e.g. 5:3 in P1, genuine 0:0 in P2 would otherwise be skipped).
+    When n_periods is None, fall back to stopping when cumulative == final score.
+    Slots containing '-:-' (no data) are skipped entirely.
+
+    Returns e.g. [{"home": 5, "away": 3}, {"home": 0, "away": 0}]
+    """
+    if not period_scores_json:
+        return []
+    try:
+        raw = json.loads(period_scores_json).strip("()")
+    except (json.JSONDecodeError, AttributeError):
+        return []
+
+    result: list[dict] = []
+    cum_h = cum_a = 0
+    for part in raw.split(","):
+        part = part.strip()
+        m = re.match(r"^(\d+):(\d+)$", part)
+        if not m:
+            continue  # '-:-' or malformed — no data for this period
+        h, a = int(m.group(1)), int(m.group(2))
+        if n_periods is not None:
+            if len(result) >= n_periods:
+                break
+        else:
+            # Fallback: stop when cumulative matches final score (remaining are placeholders)
+            if score_home is not None and score_away is not None:
+                if cum_h == score_home and cum_a == score_away:
+                    break
+        cum_h += h
+        cum_a += a
+        result.append({"home": h, "away": a})
+    return result
+
+
+def make_composed_id(internal_id: str, swissunihockey_id: int | None) -> str:
+    """Build a composed player ID string: {internal_id}_{swissunihockey_id or 0}."""
+    sid = swissunihockey_id if swissunihockey_id is not None and swissunihockey_id > 0 else 0
+    return f"{internal_id}_{sid}"

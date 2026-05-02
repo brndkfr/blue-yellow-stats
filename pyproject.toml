@@ -5,6 +5,7 @@ description = "Game Stats and analytics"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+  "anthropic>=0.97.0",
   "requests>=2.32",
   "rich>=15.0.0",
   "sqlite-utils>=3.37",

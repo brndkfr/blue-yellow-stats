@@ -475,6 +475,8 @@ def run():
 
         roster_teams += 1
         for player in roster:
+            internal_id = _api.make_internal_id(player["name"])
+            composed_id = _api.make_composed_id(internal_id, player["player_id"])
             _db.upsert_player(db, {
                 "player_id": player["player_id"],
                 "club_id": club_id,
@@ -483,6 +485,9 @@ def run():
                 "birth_year": player["birth_year"],
                 "height_cm": None,
                 "is_junior": player["is_junior"],
+                "swissunihockey_id": player["player_id"],
+                "internal_id": internal_id,
+                "composed_id": composed_id,
             })
             _db.upsert_player_season(db, {
                 "player_id": player["player_id"],
@@ -508,6 +513,11 @@ def run():
             if profile:
                 profile["name"] = scorer["name"]
                 profile["club_id"] = club_id
+                internal_id = _api.make_internal_id(scorer["name"])
+                composed_id = _api.make_composed_id(internal_id, pid)
+                profile["swissunihockey_id"] = pid
+                profile["internal_id"] = internal_id
+                profile["composed_id"] = composed_id
                 _db.upsert_player(db, profile)
 
         # player_seasons — aggregate from topscorer row
