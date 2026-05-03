@@ -126,10 +126,10 @@
          @click.self="helpOpen = false">
       <div class="w-full bg-gray-800 rounded-2xl p-5 max-h-[80vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
-          <p class="font-bold text-sm">Kurzanleitung</p>
+          <p class="font-bold text-base">Kurzanleitung</p>
           <button @click="helpOpen = false" class="text-gray-400 text-lg leading-none px-2">✕</button>
         </div>
-        <div class="space-y-3 text-xs text-gray-300">
+        <div class="space-y-3 text-sm text-gray-300">
           <div>
             <p class="font-semibold text-white mb-0.5">1. Spieler auswählen</p>
             <p class="text-gray-400">Spieler im Kader antippen — wird gelb markiert. Nochmal tippen zum Abwählen.</p>
@@ -179,8 +179,8 @@
                     : 'bg-gray-800 active:bg-gray-700')"
               class="flex flex-col items-center py-4 rounded-2xl transition-colors"
             >
-              <span class="text-3xl font-black text-yellow-400 leading-none" x-text="g.nr"></span>
-              <span class="text-xs text-gray-300 mt-1" x-text="g.name"></span>
+              <span class="text-3xl font-black text-yellow-400 leading-none" x-text="'#' + g.nr"></span>
+              <span class="text-sm text-gray-300 mt-1" x-text="g.name"></span>
             </button>
           </template>
         </div>
@@ -202,8 +202,8 @@
                     : 'bg-gray-800 active:bg-gray-700')"
               class="flex flex-col items-center py-3 rounded-2xl transition-colors"
             >
-              <span class="text-2xl font-black text-blue-400 leading-none" x-text="p.nr"></span>
-              <span class="text-xs text-gray-300 mt-1 leading-tight text-center px-1" x-text="p.name"></span>
+              <span class="text-2xl font-black text-blue-400 leading-none" x-text="'#' + p.nr"></span>
+              <span class="text-sm text-gray-300 mt-1 leading-tight text-center px-1" x-text="p.name"></span>
             </button>
           </template>
         </div>
@@ -225,8 +225,8 @@
                     : 'bg-gray-800/50 active:bg-gray-700')"
               class="flex flex-col items-center py-3 rounded-2xl transition-colors"
             >
-              <span class="text-xl font-black text-gray-500 leading-none" x-text="r.nr"></span>
-              <span class="text-xs text-gray-500 mt-1" x-text="r.name"></span>
+              <span class="text-xl font-black text-gray-500 leading-none" x-text="'#' + r.nr"></span>
+              <span class="text-sm text-gray-500 mt-1" x-text="r.name"></span>
             </button>
           </template>
         </div>
