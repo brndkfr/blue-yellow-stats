@@ -73,6 +73,16 @@
           </template>
         </select>
       </div>
+
+      <!-- Offline queue badge — shown when events are waiting to be sent -->
+      <div x-show="queueCount > 0" class="mt-1.5 flex items-center gap-2">
+        <button @click="_flushQueue()"
+                class="flex items-center gap-1.5 bg-red-600 text-white text-xs font-semibold px-2.5 py-1 rounded-full active:bg-red-700">
+          <span x-text="queueCount"></span>
+          <span>ausstehend — jetzt senden</span>
+        </button>
+        <span class="text-yellow-400 text-xs">Kein Stress, alles gespeichert ✓</span>
+      </div>
     </header>
 
     <!-- ── Feedback toast ── -->
@@ -257,6 +267,8 @@
         notePrompt:     false,
         pendingPayload: null,
         note:           '',
+        queueCount:     0,
+        syncing:        false,
 
         actions: [
           { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
@@ -273,6 +285,10 @@
             const res  = await fetch('./' + file);
             if (!res.ok) throw new Error(`${file} nicht gefunden (HTTP ${res.status})`);
             this.config = await res.json();
+            this.queueCount = this._loadQueue().length;
+            this._flushQueue();
+            setInterval(() => this._flushQueue(), 30_000);
+            window.addEventListener('online', () => this._flushQueue());
           } catch (err) {
             this.error = err.message;
           } finally {
@@ -320,8 +336,50 @@
             method:  'POST',
             mode:    'no-cors',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body:    new URLSearchParams(payload).toString(),
-          }).catch(() => {});
+            body:    new URLSearchParams({ ...payload, was_queued: 'FALSE' }).toString(),
+          }).catch(() => this._enqueue(payload));
+        },
+
+        _loadQueue() {
+          try { return JSON.parse(localStorage.getItem('jets_queue') || '[]'); }
+          catch { return []; }
+        },
+
+        _saveQueue(q) {
+          localStorage.setItem('jets_queue', JSON.stringify(q));
+          this.queueCount = q.length;
+        },
+
+        _enqueue(payload) {
+          const q = this._loadQueue();
+          q.push({ ...payload, was_queued: 'TRUE' });
+          this._saveQueue(q);
+        },
+
+        async _flushQueue() {
+          if (this.syncing) return;
+          const q = this._loadQueue();
+          if (!q.length) return;
+          this.syncing = true;
+          const url    = this.config?.game_info?.script_url;
+          const failed = [];
+          for (const payload of q) {
+            try {
+              await fetch(url, {
+                method:  'POST',
+                mode:    'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body:    new URLSearchParams(payload).toString(),
+              });
+            } catch {
+              failed.push(payload);
+            }
+          }
+          this._saveQueue(failed);
+          if (failed.length < q.length) {
+            this._toast(`✓ ${q.length - failed.length} gespeicherte Aktion(en) gesendet`);
+          }
+          this.syncing = false;
         },
 
         // Returns true if now is >120 min after game start (game over + 30 min buffer)

@@ -27,7 +27,7 @@ function _ensureEventsHeader(sheet) {
     sheet.appendRow([
       'game_id', 'game_date', 'game_start', 'opponent', 'type', 'venue', 'home',
       'period', 'timestamp', 'player_nr', 'player_name', 'action', 'assist',
-      'scout', 'note', 'received_at',
+      'scout', 'note', 'was_queued', 'received_at',
     ]);
     sheet.setFrozenRows(1);
   }
@@ -85,6 +85,7 @@ function doPost(e) {
     p.assist      || '',
     p.scout       || '',
     p.note        || '',
+    p.was_queued  || '',
     new Date(),
   ]);
 
