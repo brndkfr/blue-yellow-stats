@@ -139,22 +139,53 @@
             <p class="text-gray-400">Eine der sechs Aktionsfelder unten antippen: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, 🧤 Topparade, ⚠️ Ballverlust.</p>
           </div>
           <div>
-            <p class="font-semibold text-white mb-0.5">3. Tor erfassen</p>
-            <p class="text-gray-400">Torschützen wählen → grünen ⚽ Tor-Button tippen → Assistspieler antippen. Falls kein Assist: «Kein Assist» tippen.</p>
+            <p class="font-semibold text-white mb-0.5">3. Goal erfassen</p>
+            <p class="text-gray-400">Torschützen wählen → grünen ⚽ Goal-Button tippen → Assistspieler antippen. Falls kein Assist: «Kein Assist» tippen.</p>
           </div>
           <div>
-            <p class="font-semibold text-white mb-0.5">4. Scout auswählen</p>
+            <p class="font-semibold text-white mb-0.5">4. Gegengoal erfassen</p>
+            <p class="text-gray-400">Roten 🔴 Gegengoal-Button tippen → Grund auswählen oder «Kein Grund» tippen. Kein Spieler muss ausgewählt sein.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">5. Scout auswählen</p>
             <p class="text-gray-400">Oben im Dropdown den eigenen Namen wählen, damit später klar ist wer was erfasst hat.</p>
           </div>
           <div>
-            <p class="font-semibold text-white mb-0.5">5. Kein Netz? Kein Stress.</p>
+            <p class="font-semibold text-white mb-0.5">6. Kein Netz? Kein Stress.</p>
             <p class="text-gray-400">Einträge werden lokal gespeichert und automatisch gesendet, sobald wieder eine Verbindung besteht. Der rote Badge zeigt an wie viele noch ausstehend sind.</p>
           </div>
           <div>
-            <p class="font-semibold text-white mb-0.5">6. Falsch getippt?</p>
+            <p class="font-semibold text-white mb-0.5">7. Falsch getippt?</p>
             <p class="text-gray-400">Die letzte Aktion mit ↩ Rückgängig korrigieren — sendet eine Korrekturmeldung ans Sheet.</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Gegengoal reason picker ── -->
+    <div x-show="gegentorPrompt" x-cloak
+         class="fixed inset-0 z-40 bg-black/80 flex items-end pb-6 px-4"
+         @click.self="gegentorPrompt = false">
+      <div class="w-full bg-gray-800 rounded-2xl p-5">
+        <p class="font-bold text-base mb-3">🔴 Gegengoal — Grund?</p>
+        <div class="grid grid-cols-3 gap-2 mb-3">
+          <button @click="selectReason('bad_pass')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">📤 Fehlpass</button>
+          <button @click="selectReason('no_coverage')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">🚪 Deckungsfehler</button>
+          <button @click="selectReason('counter')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">⚡ Konter</button>
+          <button @click="selectReason('unlucky')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">🎲 Pech</button>
+          <button @click="selectReason('power_play')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">👤 Überzahl</button>
+          <button @click="selectReason('free_shot')"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl py-3 text-xs font-semibold">🎯 Freier Schuss</button>
+        </div>
+        <button @click="skipReason()"
+                class="w-full bg-gray-600 active:bg-gray-500 rounded-xl py-3 text-sm font-semibold text-gray-300">
+          Kein Grund
+        </button>
       </div>
     </div>
 
@@ -165,7 +196,7 @@
 
       <!-- Goalies -->
       <section>
-        <p class="text-xs text-gray-600 uppercase tracking-widest mb-1.5">Torhüter</p>
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-1.5">Goalie</p>
         <div class="grid grid-cols-2 gap-2">
           <template x-for="g in config?.goalies || []" :key="g.nr">
             <button
@@ -250,15 +281,20 @@
               class="text-gray-700 text-xs">— Spieler auswählen —</span>
       </div>
 
-      <!-- Tor button / assist prompt -->
+      <!-- Goal / Gegengoal buttons + assist prompt -->
       <div class="mb-2">
-        <button
-          x-show="!assistMode"
-          @click="tapGoal()"
-          :disabled="!activePlayer"
-          class="w-full rounded-xl py-3 min-h-[52px] font-bold text-base bg-green-600 text-white
-                 disabled:opacity-25 active:scale-95 transition-transform"
-        >⚽ &nbsp;Tor</button>
+        <div x-show="!assistMode" class="flex gap-2">
+          <button @click="tapGoal()" :disabled="!activePlayer"
+                  class="flex-1 rounded-xl py-3 min-h-[52px] font-bold text-base bg-green-600 text-white
+                         disabled:opacity-25 active:scale-95 transition-transform">
+            ⚽ &nbsp;Goal
+          </button>
+          <button @click="tapGegengoal()"
+                  class="flex-1 rounded-xl py-3 min-h-[52px] font-bold text-base bg-red-700 text-white
+                         active:scale-95 transition-transform">
+            🔴 &nbsp;Gegengoal
+          </button>
+        </div>
 
         <div x-show="assistMode" class="flex gap-2">
           <div class="flex-1 bg-yellow-600/20 border border-yellow-600/50 rounded-xl px-3 py-2.5 flex items-center justify-center">
@@ -311,7 +347,9 @@
         note:           '',
         queueCount:     0,
         syncing:        false,
-        helpOpen:       false,
+        helpOpen:          false,
+        gegentorPrompt:    false,
+        pendingGegengoalTs: null,
 
         actions: [
           { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
@@ -362,7 +400,8 @@
         },
 
         actionLabel(code) {
-          if (code === 'goal') return 'Tor';
+          if (code === 'goal')         return 'Goal';
+          if (code === 'goal_against') return 'Gegengoal';
           return this.actions.find(a => a.code === code)?.label ?? code;
         },
 
@@ -466,8 +505,10 @@
           this.lastEvent = { ...payload };
           let msg;
           if (payload.action === 'goal') {
-            msg = `⚽ Tor! #${payload.player_nr} ${payload.player_name}`;
+            msg = `⚽ Goal! #${payload.player_nr} ${payload.player_name}`;
             if (payload.assist) msg += `  (Assist: ${payload.assist})`;
+          } else if (payload.action === 'goal_against') {
+            msg = `🔴 Gegengoal${payload.assist ? ' (' + payload.assist + ')' : ''}`;
           } else {
             msg = `✓ ${this.actionLabel(payload.action)} — #${payload.player_nr} ${payload.player_name}`;
           }
@@ -546,6 +587,28 @@
           this._toast('Korrektur gesendet');
           this.lastEvent = null;
           this._post(payload);
+        },
+
+        tapGegengoal() {
+          this.pendingGegengoalTs = this.formatTimestamp();
+          this.gegentorPrompt     = true;
+        },
+
+        selectReason(reason) {
+          const payload = {
+            ...this._basePayload(this.pendingGegengoalTs),
+            player_nr:   0,
+            player_name: '',
+            action:      'goal_against',
+            assist:      reason,
+          };
+          this.gegentorPrompt    = false;
+          this.pendingGegengoalTs = null;
+          this._maybePromptOrPost(payload);
+        },
+
+        skipReason() {
+          this.selectReason('');
         },
       };
     }
