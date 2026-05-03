@@ -296,14 +296,21 @@
           </button>
         </div>
 
-        <div x-show="assistMode" class="flex gap-2">
-          <div class="flex-1 bg-yellow-600/20 border border-yellow-600/50 rounded-xl px-3 py-2.5 flex items-center justify-center">
-            <span class="text-yellow-400 text-xs font-bold">Assist tippen — oder:</span>
-          </div>
-          <button @click="skipAssist()"
-                  class="bg-gray-700 active:bg-gray-600 rounded-xl px-4 text-sm font-semibold text-gray-200">
-            Kein Assist
+        <div x-show="assistMode" class="space-y-1.5">
+          <button @click="goalPowerPlay = !goalPowerPlay"
+                  :class="goalPowerPlay ? 'bg-blue-700/40 border-blue-500 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-500'"
+                  class="w-full border rounded-lg px-3 py-1.5 text-xs font-semibold text-left transition-colors">
+            👤 Überzahl
           </button>
+          <div class="flex gap-2">
+            <div class="flex-1 bg-yellow-600/20 border border-yellow-600/50 rounded-xl px-3 py-2.5 flex items-center justify-center">
+              <span class="text-yellow-400 text-xs font-bold">Assist tippen — oder:</span>
+            </div>
+            <button @click="skipAssist()"
+                    class="bg-gray-700 active:bg-gray-600 rounded-xl px-4 text-sm font-semibold text-gray-200">
+              Kein Assist
+            </button>
+          </div>
         </div>
       </div>
 
@@ -316,7 +323,7 @@
             :class="[action.bg, action.fg]"
             class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
                    disabled:opacity-25 disabled:cursor-not-allowed
-                   active:scale-95 transition-transform"
+                   active:scale-95 active:bg-gray-700 transition-transform"
           >
             <span class="text-xl leading-none" x-text="action.icon"></span>
             <span class="text-xs font-semibold mt-1 leading-tight" x-text="action.label"></span>
@@ -347,17 +354,18 @@
         note:           '',
         queueCount:     0,
         syncing:        false,
-        helpOpen:          false,
-        gegentorPrompt:    false,
+        helpOpen:           false,
+        gegentorPrompt:     false,
         pendingGegengoalTs: null,
+        goalPowerPlay:      false,
 
         actions: [
-          { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
-          { code: 'stop',      label: 'Abwehr',        icon: '🛡️', bg: 'bg-blue-700',   fg: 'text-white'    },
-          { code: 'key_pass',  label: 'Schlüsselpass', icon: '🔑', bg: 'bg-yellow-500', fg: 'text-gray-900' },
-          { code: 'slot_shot', label: 'Torschuss',     icon: '🎯', bg: 'bg-orange-600', fg: 'text-white'    },
-          { code: 'slot_save', label: 'Topparade',     icon: '🧤', bg: 'bg-sky-500',    fg: 'text-white'    },
-          { code: 'turnover',  label: 'Ballverlust',   icon: '⚠️', bg: 'bg-red-700',    fg: 'text-white'    },
+          { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'stop',      label: 'Abwehr',        icon: '🛡️', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'key_pass',  label: 'Schlüsselpass', icon: '🔑', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'slot_shot', label: 'Torschuss',     icon: '🎯', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'slot_save', label: 'Topparade',     icon: '🧤', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'turnover',  label: 'Ballverlust',   icon: '⚠️', bg: 'bg-gray-800', fg: 'text-gray-100' },
         ],
 
         async init() {
@@ -507,6 +515,7 @@
           if (payload.action === 'goal') {
             msg = `⚽ Goal! #${payload.player_nr} ${payload.player_name}`;
             if (payload.assist) msg += `  (Assist: ${payload.assist})`;
+            if (payload.note === 'power_play') msg += '  👤 PP';
           } else if (payload.action === 'goal_against') {
             msg = `🔴 Gegengoal${payload.assist ? ' (' + payload.assist + ')' : ''}`;
           } else {
@@ -547,6 +556,7 @@
             player_name: this.pendingScorer.name,
             action:      'goal',
             assist:      player.name,
+            note:        this.goalPowerPlay ? 'power_play' : '',
           };
           this._exitAssistMode();
           this._maybePromptOrPost(payload);
@@ -560,6 +570,7 @@
             player_name: this.pendingScorer.name,
             action:      'goal',
             assist:      '',
+            note:        this.goalPowerPlay ? 'power_play' : '',
           };
           this._exitAssistMode();
           this._maybePromptOrPost(payload);
@@ -570,6 +581,7 @@
           this.pendingScorer = null;
           this.pendingTs     = null;
           this.activePlayer  = null;
+          this.goalPowerPlay = false;
         },
 
         // Late note confirmed — attach note and send
