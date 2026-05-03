@@ -1,4 +1,4 @@
-{
+﻿{
   "game_info": {
     "game_id":            "",
     "date":               "",
@@ -9,7 +9,7 @@
     "home":               false,
     "format":             2,
     "minutes_per_period": 20,
-    "script_url":         "https://script.google.com/macros/s/AKfycby7fVggleZby72gGvqirlGdQYrF7MGl-lsRVDFC8_ZFuK8ihNIdNEFiVL6NpaDoOHrI/exec",
+    "script_url":         "https://script.google.com/macros/s/AKfycbznmPQGNLFWx4xffTEKh0bDzl7sSW4A_qLRqUTtde3ouA90LkWGWEmEDGUjlOon0JU/exec",
     "scouts":             []
   },
   "goalies": [
