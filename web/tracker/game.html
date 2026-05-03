@@ -39,11 +39,15 @@
           <span class="font-bold text-sm truncate" x-text="config?.game_info?.opponent"></span>
           <span class="text-gray-500 text-xs ml-2" x-text="'ID: ' + (config?.game_info?.game_id || '—')"></span>
         </div>
-        <button
-          @click="undo()"
-          :disabled="!lastEvent"
-          class="text-xs px-3 py-1.5 rounded-lg bg-gray-700 active:bg-gray-600 disabled:opacity-25 disabled:cursor-not-allowed flex-shrink-0 ml-2"
-        >↩ Rückgängig</button>
+        <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          <button @click="helpOpen = true"
+                  class="text-xs w-7 h-7 rounded-full bg-gray-700 active:bg-gray-600 flex items-center justify-center text-gray-300 font-bold">?</button>
+          <button
+            @click="undo()"
+            :disabled="!lastEvent"
+            class="text-xs px-3 py-1.5 rounded-lg bg-gray-700 active:bg-gray-600 disabled:opacity-25 disabled:cursor-not-allowed"
+          >↩ Rückgängig</button>
+        </div>
       </div>
 
       <!-- Period tabs -->
@@ -113,6 +117,44 @@
                 class="w-full bg-blue-600 active:bg-blue-700 rounded-xl py-3 font-bold text-sm">
           Senden
         </button>
+      </div>
+    </div>
+
+    <!-- ── Help modal ── -->
+    <div x-show="helpOpen" x-cloak
+         class="fixed inset-0 z-40 bg-black/80 flex items-end pb-6 px-4"
+         @click.self="helpOpen = false">
+      <div class="w-full bg-gray-800 rounded-2xl p-5 max-h-[80vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <p class="font-bold text-sm">Kurzanleitung</p>
+          <button @click="helpOpen = false" class="text-gray-400 text-lg leading-none px-2">✕</button>
+        </div>
+        <div class="space-y-3 text-xs text-gray-300">
+          <div>
+            <p class="font-semibold text-white mb-0.5">1. Spieler auswählen</p>
+            <p class="text-gray-400">Spieler im Kader antippen — wird gelb markiert. Nochmal tippen zum Abwählen.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">2. Aktion erfassen</p>
+            <p class="text-gray-400">Eine der sechs Aktionsfelder unten antippen: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, 🧤 Topparade, ⚠️ Ballverlust.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">3. Tor erfassen</p>
+            <p class="text-gray-400">Torschützen wählen → grünen ⚽ Tor-Button tippen → Assistspieler antippen. Falls kein Assist: «Kein Assist» tippen.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">4. Scout auswählen</p>
+            <p class="text-gray-400">Oben im Dropdown den eigenen Namen wählen, damit später klar ist wer was erfasst hat.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">5. Kein Netz? Kein Stress.</p>
+            <p class="text-gray-400">Einträge werden lokal gespeichert und automatisch gesendet, sobald wieder eine Verbindung besteht. Der rote Badge zeigt an wie viele noch ausstehend sind.</p>
+          </div>
+          <div>
+            <p class="font-semibold text-white mb-0.5">6. Falsch getippt?</p>
+            <p class="text-gray-400">Die letzte Aktion mit ↩ Rückgängig korrigieren — sendet eine Korrekturmeldung ans Sheet.</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -269,6 +311,7 @@
         note:           '',
         queueCount:     0,
         syncing:        false,
+        helpOpen:       false,
 
         actions: [
           { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
