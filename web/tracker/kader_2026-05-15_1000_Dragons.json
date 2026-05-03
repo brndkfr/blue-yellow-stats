@@ -1,0 +1,39 @@
+{
+  "game_info": {
+    "game_id":            "2026-05-15_1000_Dragons",
+    "date":               "15.05.2026",
+    "time":               "10:00",
+    "opponent":           "Zürich Dragons",
+    "type":               "test",
+    "venue":              "Sporthalle Stighag, Kloten",
+    "home":               true,
+    "format":             2,
+    "minutes_per_period": 20,
+    "script_url":         "https://script.google.com/macros/s/AKfycby7fVggleZby72gGvqirlGdQYrF7MGl-lsRVDFC8_ZFuK8ihNIdNEFiVL6NpaDoOHrI/exec"
+  },
+  "goalies": [
+    { "nr": 18, "name": "Ben Uriel K." },
+    { "nr": 27, "name": "Lio R."       }
+  ],
+  "players": [
+    { "nr":  1, "name": "Leevi A."    },
+    { "nr":  3, "name": "Livio B."    },
+    { "nr":  4, "name": "Jan B."      },
+    { "nr":  6, "name": "Benjamin B." },
+    { "nr":  8, "name": "Luis F."     },
+    { "nr": 10, "name": "Thierry G."  },
+    { "nr": 11, "name": "Remy G."     },
+    { "nr": 12, "name": "Noah G."     },
+    { "nr": 13, "name": "Liam H."     },
+    { "nr": 15, "name": "Ellis H."    },
+    { "nr": 17, "name": "Elio K."     },
+    { "nr": 19, "name": "Ben M."      },
+    { "nr": 22, "name": "Noel M."     },
+    { "nr": 25, "name": "Dario R."    },
+    { "nr": 28, "name": "Gian S."     }
+  ],
+  "reserves": [
+    { "nr":  7, "name": "Avi F."      },
+    { "nr": 20, "name": "Lyan M."     }
+  ]
+}

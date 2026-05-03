@@ -1,49 +1,38 @@
 {
   "game_info": {
-    "game_id":            "",
-    "date":               "",
-    "time":               "",
-    "opponent":           "",
-    "type":               "regular",
-    "venue":              "",
-    "home":               false,
+    "game_id":            "2026-05-15_1130_Eagles",
+    "date":               "15.05.2026",
+    "time":               "11:30",
+    "opponent":           "Bern Eagles",
+    "type":               "test",
+    "venue":              "Sporthalle Stighag, Kloten",
+    "home":               true,
     "format":             2,
     "minutes_per_period": 20,
     "script_url":         "https://script.google.com/macros/s/AKfycby7fVggleZby72gGvqirlGdQYrF7MGl-lsRVDFC8_ZFuK8ihNIdNEFiVL6NpaDoOHrI/exec"
   },
   "goalies": [
     { "nr":  5, "name": "Alexander B." },
-    { "nr":  9, "name": "Lenny F."     },
-    { "nr": 16, "name": "Colin H."     },
-    { "nr": 18, "name": "Ben Uriel K." },
-    { "nr": 23, "name": "Nils M."      },
-    { "nr": 27, "name": "Lio R."       },
     { "nr": 30, "name": "Dionys S."    }
   ],
   "players": [
-    { "nr":  1, "name": "Leevi A."     },
     { "nr":  2, "name": "Lias B."      },
-    { "nr":  3, "name": "Livio B."     },
     { "nr":  4, "name": "Jan B."       },
-    { "nr":  6, "name": "Benjamin B."  },
     { "nr":  7, "name": "Avi F."       },
     { "nr":  8, "name": "Luis F."      },
     { "nr": 10, "name": "Thierry G."   },
-    { "nr": 11, "name": "Remy G."      },
-    { "nr": 12, "name": "Noah G."      },
     { "nr": 13, "name": "Liam H."      },
     { "nr": 14, "name": "Tino H."      },
-    { "nr": 15, "name": "Ellis H."     },
     { "nr": 17, "name": "Elio K."      },
-    { "nr": 19, "name": "Ben M."       },
     { "nr": 20, "name": "Lyan M."      },
     { "nr": 21, "name": "Alonso M."    },
-    { "nr": 22, "name": "Noel M."      },
     { "nr": 24, "name": "Nils P."      },
-    { "nr": 25, "name": "Dario R."     },
     { "nr": 26, "name": "Robin R."     },
     { "nr": 28, "name": "Gian S."      },
     { "nr": 29, "name": "Livio S."     }
   ],
-  "reserves": []
+  "reserves": [
+    { "nr":  6, "name": "Benjamin B."  },
+    { "nr": 12, "name": "Noah G."      }
+  ]
 }
