@@ -9,8 +9,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
   <style>
-    button { touch-action: manipulation; }
+    button, select { touch-action: manipulation; }
     .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen select-none"
@@ -46,7 +47,7 @@
       </div>
 
       <!-- Period tabs -->
-      <div class="flex gap-1.5">
+      <div class="flex gap-1.5 mb-1.5">
         <template x-for="p in periods()" :key="p.n">
           <button
             @click="activePeriod = p.n"
@@ -61,6 +62,17 @@
           class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
         >OT</button>
       </div>
+
+      <!-- Scout dropdown — only shown when scouts are configured -->
+      <div x-show="config?.game_info?.scouts?.length > 0">
+        <select x-model="selectedScout"
+                class="w-full bg-gray-800 border border-gray-700 text-xs text-gray-300 rounded-lg px-2 py-1.5 outline-none">
+          <option value="">— Scout auswählen —</option>
+          <template x-for="s in config?.game_info?.scouts || []" :key="s">
+            <option :value="s" x-text="s"></option>
+          </template>
+        </select>
+      </div>
     </header>
 
     <!-- ── Feedback toast ── -->
@@ -71,12 +83,33 @@
       x-transition:enter-end="opacity-100 translate-y-0"
       x-transition:leave="transition duration-300"
       x-transition:leave-end="opacity-0"
-      class="fixed top-28 left-4 right-4 z-30 bg-green-800 text-white text-sm text-center py-2 px-4 rounded-xl shadow-xl"
+      class="fixed top-36 left-4 right-4 z-30 bg-green-800 text-white text-sm text-center py-2 px-4 rounded-xl shadow-xl"
       x-text="feedback"
     ></div>
 
-    <!-- ── Scrollable roster ── -->
-    <main class="pt-28 pb-44 px-3 space-y-4">
+    <!-- ── Late-entry note modal ── -->
+    <div x-show="notePrompt" x-cloak
+         class="fixed inset-0 z-40 bg-black/80 flex items-end pb-6 px-4">
+      <div class="w-full bg-gray-800 rounded-2xl p-5">
+        <p class="text-sm font-bold mb-0.5">Spiel bereits beendet</p>
+        <p class="text-xs text-gray-400 mb-3">Kommentar zum Nachtrag (optional):</p>
+        <input
+          x-model="note"
+          type="text"
+          placeholder="z.B. Korrektur, vergessener Eintrag…"
+          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-3 outline-none text-white placeholder-gray-500"
+        />
+        <button @click="confirmNote()"
+                class="w-full bg-blue-600 active:bg-blue-700 rounded-xl py-3 font-bold text-sm">
+          Senden
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Scrollable roster ──
+         pt-40: header with scout dropdown (~160px)
+         pb-64: footer with Tor button + 2×3 grid (~256px)  -->
+    <main class="pt-40 pb-64 px-3 space-y-4">
 
       <!-- Goalies -->
       <section>
@@ -84,8 +117,14 @@
         <div class="grid grid-cols-2 gap-2">
           <template x-for="g in config?.goalies || []" :key="g.nr">
             <button
-              @click="selectPlayer(g)"
-              :class="isActive(g) ? 'ring-2 ring-yellow-400 bg-blue-900' : 'bg-gray-800 active:bg-gray-700'"
+              @click="assistMode ? selectAssist(g) : selectPlayer(g)"
+              :class="assistMode
+                ? (pendingScorer?.nr === g.nr
+                    ? 'ring-2 ring-yellow-500 bg-yellow-900/30 opacity-50 cursor-not-allowed'
+                    : 'bg-gray-800 ring-2 ring-blue-500 active:bg-blue-900')
+                : (isActive(g)
+                    ? 'ring-2 ring-yellow-400 bg-blue-900'
+                    : 'bg-gray-800 active:bg-gray-700')"
               class="flex flex-col items-center py-4 rounded-2xl transition-colors"
             >
               <span class="text-3xl font-black text-yellow-400 leading-none" x-text="g.nr"></span>
@@ -101,8 +140,14 @@
         <div class="grid grid-cols-3 gap-2">
           <template x-for="p in config?.players || []" :key="p.nr">
             <button
-              @click="selectPlayer(p)"
-              :class="isActive(p) ? 'ring-2 ring-yellow-400 bg-blue-900' : 'bg-gray-800 active:bg-gray-700'"
+              @click="assistMode ? selectAssist(p) : selectPlayer(p)"
+              :class="assistMode
+                ? (pendingScorer?.nr === p.nr
+                    ? 'ring-2 ring-yellow-500 bg-yellow-900/30 opacity-50 cursor-not-allowed'
+                    : 'bg-gray-800 ring-2 ring-blue-500 active:bg-blue-900')
+                : (isActive(p)
+                    ? 'ring-2 ring-yellow-400 bg-blue-900'
+                    : 'bg-gray-800 active:bg-gray-700')"
               class="flex flex-col items-center py-3 rounded-2xl transition-colors"
             >
               <span class="text-2xl font-black text-blue-400 leading-none" x-text="p.nr"></span>
@@ -118,8 +163,14 @@
         <div class="grid grid-cols-2 gap-2">
           <template x-for="r in config?.reserves || []" :key="r.nr">
             <button
-              @click="selectPlayer(r)"
-              :class="isActive(r) ? 'ring-2 ring-yellow-400 bg-blue-900' : 'bg-gray-800/50 active:bg-gray-700'"
+              @click="assistMode ? selectAssist(r) : selectPlayer(r)"
+              :class="assistMode
+                ? (pendingScorer?.nr === r.nr
+                    ? 'ring-2 ring-yellow-500 bg-yellow-900/30 opacity-50 cursor-not-allowed'
+                    : 'bg-gray-800/50 ring-2 ring-blue-500 active:bg-blue-900')
+                : (isActive(r)
+                    ? 'ring-2 ring-yellow-400 bg-blue-900'
+                    : 'bg-gray-800/50 active:bg-gray-700')"
               class="flex flex-col items-center py-3 rounded-2xl transition-colors"
             >
               <span class="text-xl font-black text-gray-500 leading-none" x-text="r.nr"></span>
@@ -133,19 +184,47 @@
 
     <!-- ── Fixed action bar ── -->
     <footer class="fixed bottom-0 left-0 right-0 z-20 bg-gray-900/95 backdrop-blur border-t border-gray-800 px-3 pt-2 pb-safe">
+
+      <!-- Status strip -->
       <div class="text-center h-5 mb-1.5">
-        <span
-          x-show="activePlayer"
-          class="text-yellow-400 text-xs font-semibold"
-          x-text="activePlayer ? '#' + activePlayer.nr + '  ' + activePlayer.name : ''"
-        ></span>
-        <span x-show="!activePlayer" class="text-gray-700 text-xs">— Spieler auswählen —</span>
+        <span x-show="assistMode" class="text-yellow-400 text-xs font-semibold">
+          ⚽ #<span x-text="pendingScorer?.nr"></span> <span x-text="pendingScorer?.name"></span>
+          &nbsp;→&nbsp; Assist tippen
+        </span>
+        <span x-show="!assistMode && activePlayer"
+              class="text-yellow-400 text-xs font-semibold"
+              x-text="activePlayer ? '#' + activePlayer.nr + '  ' + activePlayer.name : ''"></span>
+        <span x-show="!assistMode && !activePlayer"
+              class="text-gray-700 text-xs">— Spieler auswählen —</span>
       </div>
+
+      <!-- Tor button / assist prompt -->
+      <div class="mb-2">
+        <button
+          x-show="!assistMode"
+          @click="tapGoal()"
+          :disabled="!activePlayer"
+          class="w-full rounded-xl py-3 min-h-[52px] font-bold text-base bg-green-600 text-white
+                 disabled:opacity-25 active:scale-95 transition-transform"
+        >⚽ &nbsp;Tor</button>
+
+        <div x-show="assistMode" class="flex gap-2">
+          <div class="flex-1 bg-yellow-600/20 border border-yellow-600/50 rounded-xl px-3 py-2.5 flex items-center justify-center">
+            <span class="text-yellow-400 text-xs font-bold">Assist tippen — oder:</span>
+          </div>
+          <button @click="skipAssist()"
+                  class="bg-gray-700 active:bg-gray-600 rounded-xl px-4 text-sm font-semibold text-gray-200">
+            Kein Assist
+          </button>
+        </div>
+      </div>
+
+      <!-- 2×3 Moneyball action grid -->
       <div class="grid grid-cols-3 gap-2">
         <template x-for="action in actions" :key="action.code">
           <button
             @click="sendAction(action.code)"
-            :disabled="!activePlayer"
+            :disabled="!activePlayer || assistMode"
             :class="[action.bg, action.fg]"
             class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
                    disabled:opacity-25 disabled:cursor-not-allowed
@@ -163,14 +242,21 @@
   <script>
     function tracker() {
       return {
-        config:       null,
-        loading:      true,
-        error:        null,
-        activePeriod: 1,
-        activePlayer: null,
-        lastEvent:    null,
-        feedback:     null,
-        _feedTimer:   null,
+        config:         null,
+        loading:        true,
+        error:          null,
+        activePeriod:   1,
+        activePlayer:   null,
+        lastEvent:      null,
+        feedback:       null,
+        _feedTimer:     null,
+        selectedScout:  '',
+        assistMode:     false,
+        pendingScorer:  null,
+        pendingTs:      null,
+        notePrompt:     false,
+        pendingPayload: null,
+        note:           '',
 
         actions: [
           { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-green-700',  fg: 'text-white'    },
@@ -217,13 +303,14 @@
         },
 
         actionLabel(code) {
+          if (code === 'goal') return 'Tor';
           return this.actions.find(a => a.code === code)?.label ?? code;
         },
 
         _toast(msg) {
           this.feedback = msg;
           clearTimeout(this._feedTimer);
-          this._feedTimer = setTimeout(() => { this.feedback = null; }, 2200);
+          this._feedTimer = setTimeout(() => { this.feedback = null; }, 2500);
         },
 
         _post(payload) {
@@ -237,25 +324,119 @@
           }).catch(() => {});
         },
 
+        // Returns true if now is >120 min after game start (game over + 30 min buffer)
+        _isLate() {
+          const gi = this.config?.game_info;
+          if (!gi?.date || !gi?.time) return false;
+          const [dd, mm, yyyy] = gi.date.split('.');
+          const [hh, mn]       = gi.time.split(':');
+          const gameStart = new Date(+yyyy, +mm - 1, +dd, +hh, +mn);
+          return Date.now() > gameStart.getTime() + 120 * 60 * 1000;
+        },
+
+        _basePayload(ts) {
+          const gi = this.config.game_info;
+          return {
+            game_id:    gi.game_id    || '',
+            game_date:  gi.date       || '',
+            game_start: gi.time       || '',
+            opponent:   gi.opponent   || '',
+            type:       gi.type       || '',
+            venue:      gi.venue      || '',
+            home:       gi.home ? 'TRUE' : 'FALSE',
+            period:     this.activePeriod,
+            timestamp:  ts || this.formatTimestamp(),
+            scout:      this.selectedScout,
+            note:       '',
+          };
+        },
+
+        _maybePromptOrPost(payload) {
+          if (this._isLate()) {
+            this.pendingPayload = payload;
+            this.note           = '';
+            this.notePrompt     = true;
+          } else {
+            this._postAndToast(payload);
+          }
+        },
+
+        _postAndToast(payload) {
+          this.lastEvent = { ...payload };
+          let msg;
+          if (payload.action === 'goal') {
+            msg = `⚽ Tor! #${payload.player_nr} ${payload.player_name}`;
+            if (payload.assist) msg += `  (Assist: ${payload.assist})`;
+          } else {
+            msg = `✓ ${this.actionLabel(payload.action)} — #${payload.player_nr} ${payload.player_name}`;
+          }
+          this._toast(msg);
+          this._post(payload);
+        },
+
+        // Standard Moneyball action
         sendAction(code) {
           if (!this.activePlayer) return;
           const payload = {
-            game_id:     this.config.game_info.game_id,
-            date:        this.config.game_info.date     || '',
-            time:        this.config.game_info.time     || '',
-            opponent:    this.config.game_info.opponent || '',
-            type:        this.config.game_info.type     || '',
-            venue:       this.config.game_info.venue    || '',
-            home:        this.config.game_info.home ? 'TRUE' : 'FALSE',
-            period:      this.activePeriod,
-            timestamp:   this.formatTimestamp(),
+            ...this._basePayload(),
             player_nr:   this.activePlayer.nr,
             player_name: this.activePlayer.name,
             action:      code,
+            assist:      '',
           };
-          this.lastEvent = { ...payload };
-          this._toast(`✓ ${this.actionLabel(code)} — #${payload.player_nr} ${payload.player_name}`);
-          this._post(payload);
+          this._maybePromptOrPost(payload);
+        },
+
+        // Goal — step 1: lock scorer, enter assist mode
+        tapGoal() {
+          if (!this.activePlayer) return;
+          this.pendingScorer = { ...this.activePlayer };
+          this.pendingTs     = this.formatTimestamp(); // capture time at moment of tap
+          this.activePlayer  = null;
+          this.assistMode    = true;
+        },
+
+        // Goal — step 2a: assister tapped
+        selectAssist(player) {
+          if (player.nr === this.pendingScorer?.nr) return; // scorer can't assist own goal
+          const payload = {
+            ...this._basePayload(this.pendingTs),
+            player_nr:   this.pendingScorer.nr,
+            player_name: this.pendingScorer.name,
+            action:      'goal',
+            assist:      player.name,
+          };
+          this._exitAssistMode();
+          this._maybePromptOrPost(payload);
+        },
+
+        // Goal — step 2b: no assist
+        skipAssist() {
+          const payload = {
+            ...this._basePayload(this.pendingTs),
+            player_nr:   this.pendingScorer.nr,
+            player_name: this.pendingScorer.name,
+            action:      'goal',
+            assist:      '',
+          };
+          this._exitAssistMode();
+          this._maybePromptOrPost(payload);
+        },
+
+        _exitAssistMode() {
+          this.assistMode    = false;
+          this.pendingScorer = null;
+          this.pendingTs     = null;
+          this.activePlayer  = null;
+        },
+
+        // Late note confirmed — attach note and send
+        confirmNote() {
+          this.pendingPayload.note = this.note;
+          this._postAndToast(this.pendingPayload);
+          this.notePrompt     = false;
+          this.pendingPayload = null;
+          this.note           = '';
         },
 
         undo() {

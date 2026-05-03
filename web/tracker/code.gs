@@ -25,8 +25,9 @@ function _getOrCreate(ss, name) {
 function _ensureEventsHeader(sheet) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
-      'game_id', 'opponent', 'type', 'period', 'timestamp',
-      'player_nr', 'player_name', 'action', 'received_at',
+      'game_id', 'game_date', 'game_start', 'opponent', 'type', 'venue', 'home',
+      'period', 'timestamp', 'player_nr', 'player_name', 'action', 'assist',
+      'scout', 'note', 'received_at',
     ]);
     sheet.setFrozenRows(1);
   }
@@ -50,13 +51,13 @@ function _upsertGame(ss, p) {
     : [];
   if (!ids.includes(p.game_id)) {
     sheet.appendRow([
-      p.game_id  || '',
-      p.date     || '',
-      p.time     || '',
-      p.opponent || '',
-      p.type     || '',
-      p.venue    || '',
-      p.home     || '',
+      p.game_id    || '',
+      p.game_date  || '',
+      p.game_start || '',
+      p.opponent   || '',
+      p.type       || '',
+      p.venue      || '',
+      p.home       || '',
       '',              // result — filled manually after the game
     ]);
   }
@@ -70,13 +71,20 @@ function doPost(e) {
   _ensureEventsHeader(evSh);
   evSh.appendRow([
     p.game_id     || '',
+    p.game_date   || '',
+    p.game_start  || '',
     p.opponent    || '',
     p.type        || '',
+    p.venue       || '',
+    p.home        || '',
     Number(p.period)    || 0,
     p.timestamp   || '',
     Number(p.player_nr) || 0,
     p.player_name || '',
     p.action      || '',
+    p.assist      || '',
+    p.scout       || '',
+    p.note        || '',
     new Date(),
   ]);
 
