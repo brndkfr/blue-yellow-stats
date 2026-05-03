@@ -66,6 +66,52 @@ web/            GitHub Pages frontend (Tailwind + Chart.js)
 config.json     Club-ID, league IDs, and runtime settings
 ```
 
+## Live Game Tracker
+
+A mobile web app for scouting and tracking events during games in real time.
+Served on GitHub Pages: `https://brndkfr.github.io/blue-yellow-stats/web/tracker/`
+
+### How it works
+
+1. Open the landing page and tap the current game card
+2. Select a player from the roster (highlighted yellow)
+3. Tap one of the six Moneyball actions or the ⚽ Tor button
+4. Events are sent to Google Sheets instantly; if there is no network they are
+   queued in `localStorage` and flushed automatically when connectivity returns
+
+### Adding a new game
+
+1. Create a kader file: `web/tracker/kader_YYYY-MM-DD_HHMM_OPP.json`
+   (copy an existing file, update `game_info` and the roster lists)
+2. Add an entry to `web/tracker/games.json`
+
+### Actions tracked
+
+| Icon | Code | Description |
+|------|------|-------------|
+| 🔄 | `recovery`  | Ballgewinn |
+| 🛡️ | `stop`      | Abwehr |
+| 🔑 | `key_pass`  | Schlüsselpass |
+| 🎯 | `slot_shot` | Torschuss |
+| 🧤 | `slot_save` | Topparade |
+| ⚠️ | `turnover`  | Ballverlust |
+| ⚽ | `goal`      | Tor (with optional assist) |
+
+### Google Sheets backend
+
+The script lives in `web/tracker/code.gs`. Events are written to two sheets:
+
+- **Events** — one row per tap (17 columns: `game_id`, `game_date`, `game_start`,
+  `opponent`, `type`, `venue`, `home`, `period`, `timestamp`, `player_nr`,
+  `player_name`, `action`, `assist`, `scout`, `note`, `was_queued`, `received_at`)
+- **Games** — one row per game, auto-upserted on the first event for that game
+
+**Deployment:** paste `code.gs` into Apps Script, then always **edit the existing
+deployment** (Manage deployments → pencil icon) rather than creating a new one —
+editing keeps the URL stable so no kader files need updating.
+
+---
+
 ## Metrics
 
 | Badge | Metric | Description |
