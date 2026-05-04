@@ -136,7 +136,7 @@
           </div>
           <div>
             <p class="font-semibold text-white mb-0.5">2. Aktion erfassen</p>
-            <p class="text-gray-400">Eine der sechs Aktionsfelder unten antippen: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, 🧤 Topparade, ⚠️ Ballverlust.</p>
+            <p class="text-gray-400">Eines der Aktionsfelder unten antippen. Goalie: 🧤 Parade, ⭐ Mega Parade, 🔑 Schlüsselpass, ⚠️ Fehlauswurf. Feldspieler: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, ⚠️ Fehlpass.</p>
           </div>
           <div>
             <p class="font-semibold text-white mb-0.5">3. Goal erfassen</p>
@@ -314,13 +314,13 @@
         </div>
       </div>
 
-      <!-- 2×3 Moneyball action grid -->
-      <div class="grid grid-cols-3 gap-2">
-        <template x-for="action in actions" :key="action.code">
+      <!-- Role-specific action grid -->
+      <div class="gap-2" :class="isGoalie() ? 'grid grid-cols-2' : 'grid grid-cols-3'">
+        <template x-for="action in currentActions()" :key="action.code">
           <button
             @click="sendAction(action.code)"
             :disabled="!activePlayer || assistMode"
-            :class="[action.bg, action.fg]"
+            :class="[action.bg, action.fg, action.span || '']"
             class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
                    disabled:opacity-25 disabled:cursor-not-allowed
                    active:scale-95 active:bg-gray-700 transition-transform"
@@ -359,13 +359,18 @@
         pendingGegengoalTs: null,
         goalPowerPlay:      false,
 
-        actions: [
+        goalieActions: [
+          { code: 'parade',      label: 'Parade',        icon: '🧤', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'mega_parade', label: 'Mega Parade',   icon: '⭐', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'key_pass',    label: 'Schlüsselpass', icon: '🔑', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'bad_throw',   label: 'Fehlauswurf',   icon: '⚠️', bg: 'bg-gray-800', fg: 'text-gray-100' },
+        ],
+        playerActions: [
           { code: 'recovery',  label: 'Ballgewinn',    icon: '🔄', bg: 'bg-gray-800', fg: 'text-gray-100' },
           { code: 'stop',      label: 'Abwehr',        icon: '🛡️', bg: 'bg-gray-800', fg: 'text-gray-100' },
           { code: 'key_pass',  label: 'Schlüsselpass', icon: '🔑', bg: 'bg-gray-800', fg: 'text-gray-100' },
           { code: 'slot_shot', label: 'Torschuss',     icon: '🎯', bg: 'bg-gray-800', fg: 'text-gray-100' },
-          { code: 'slot_save', label: 'Topparade',     icon: '🧤', bg: 'bg-gray-800', fg: 'text-gray-100' },
-          { code: 'turnover',  label: 'Ballverlust',   icon: '⚠️', bg: 'bg-gray-800', fg: 'text-gray-100' },
+          { code: 'bad_pass',  label: 'Fehlpass',      icon: '⚠️', bg: 'bg-gray-800', fg: 'text-gray-100', span: 'col-span-2' },
         ],
 
         async init() {
@@ -407,10 +412,19 @@
           return `${n.getFullYear()}-${p(n.getDate())}-${p(n.getMonth()+1)}_${p(n.getHours())}.${p(n.getMinutes())}.${p(n.getSeconds())}`;
         },
 
+        isGoalie() {
+          return this.config?.goalies?.some(g => g.nr === this.activePlayer?.nr) ?? false;
+        },
+
+        currentActions() {
+          return this.isGoalie() ? this.goalieActions : this.playerActions;
+        },
+
         actionLabel(code) {
           if (code === 'goal')         return 'Goal';
           if (code === 'goal_against') return 'Gegengoal';
-          return this.actions.find(a => a.code === code)?.label ?? code;
+          const all = [...this.goalieActions, ...this.playerActions];
+          return all.find(a => a.code === code)?.label ?? code;
         },
 
         _toast(msg) {
