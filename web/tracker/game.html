@@ -132,16 +132,16 @@
         </div>
         <div class="space-y-3 text-sm text-gray-300">
           <div>
-            <p class="font-semibold text-white mb-0.5">1. Spieler auswählen</p>
-            <p class="text-gray-400">Spieler im Kader antippen — wird gelb markiert. Nochmal tippen zum Abwählen.</p>
+            <p class="font-semibold text-white mb-0.5">1. Spieler antippen</p>
+            <p class="text-gray-400">Spieler oder Goalie antippen — ein Panel öffnet sich mit den passenden Aktionen. Nochmal tippen oder ✕ zum Schliessen.</p>
           </div>
           <div>
-            <p class="font-semibold text-white mb-0.5">2. Aktion erfassen</p>
-            <p class="text-gray-400">Eines der Aktionsfelder unten antippen. Goalie: 🧤 Parade, ⭐ Mega Parade, 🔑 Schlüsselpass, ⚠️ Fehlauswurf. Feldspieler: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, ⚠️ Fehlpass.</p>
+            <p class="font-semibold text-white mb-0.5">2. Aktion wählen</p>
+            <p class="text-gray-400">Im Panel die passende Aktion tippen — wird sofort gesendet, Panel schliesst sich. Goalie: 🧤 Parade, ⭐ Mega Parade, 🔑 Schlüsselpass, ⚠️ Fehlauswurf. Feldspieler: 🔄 Ballgewinn, 🛡️ Abwehr, 🔑 Schlüsselpass, 🎯 Torschuss, ⚠️ Fehlpass.</p>
           </div>
           <div>
             <p class="font-semibold text-white mb-0.5">3. Goal erfassen</p>
-            <p class="text-gray-400">Torschützen wählen → grünen ⚽ Goal-Button tippen → Assistspieler antippen. Falls kein Assist: «Kein Assist» tippen.</p>
+            <p class="text-gray-400">Torschützen antippen → ⚽ Goal im Panel tippen → Panel schliesst sich → Assistspieler antippen oder «Kein Assist» tippen.</p>
           </div>
           <div>
             <p class="font-semibold text-white mb-0.5">4. Gegengoal erfassen</p>
@@ -190,10 +190,8 @@
       </div>
     </div>
 
-    <!-- ── Scrollable roster ──
-         pt-40: header with scout dropdown (~160px)
-         pb-64: footer with Tor button + 2×3 grid (~256px)  -->
-    <main class="pt-40 pb-64 px-3 space-y-4">
+    <!-- ── Scrollable roster ── -->
+    <main class="pt-40 pb-36 px-3 space-y-4">
 
       <!-- Goalies -->
       <section>
@@ -266,72 +264,70 @@
 
     </main>
 
-    <!-- ── Fixed action bar ── -->
-    <footer class="fixed bottom-0 left-0 right-0 z-20 bg-gray-900/95 backdrop-blur border-t border-gray-800 px-3 pt-2 pb-safe">
-
-      <!-- Status strip -->
-      <div class="text-center h-5 mb-1.5">
-        <span x-show="assistMode" class="text-yellow-400 text-xs font-semibold">
-          ⚽ #<span x-text="pendingScorer?.nr"></span> <span x-text="pendingScorer?.name"></span>
-          &nbsp;→&nbsp; Assist tippen
-        </span>
-        <span x-show="!assistMode && activePlayer"
-              class="text-yellow-400 text-xs font-semibold"
-              x-text="activePlayer ? '#' + activePlayer.nr + '  ' + activePlayer.name : ''"></span>
-        <span x-show="!assistMode && !activePlayer"
-              class="text-gray-700 text-xs">— Spieler auswählen —</span>
+    <!-- ── Assist strip (shown above Gegengoal bar during goal flow) ── -->
+    <div x-show="assistMode" x-cloak
+         class="fixed bottom-14 left-0 right-0 z-20 bg-gray-900/98 backdrop-blur border-t border-yellow-600/40 px-3 py-2 space-y-1.5">
+      <div class="text-center text-xs font-semibold text-yellow-400">
+        ⚽ #<span x-text="pendingScorer?.nr"></span> <span x-text="pendingScorer?.name"></span>
+        &nbsp;— Assist tippen oder:
       </div>
+      <div class="flex gap-2">
+        <button @click="goalPowerPlay = !goalPowerPlay"
+                :class="goalPowerPlay ? 'bg-blue-700/40 border-blue-500 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-500'"
+                class="flex-1 border rounded-lg py-2 text-xs font-semibold transition-colors">
+          👤 Überzahl
+        </button>
+        <button @click="skipAssist()"
+                class="flex-1 bg-gray-700 active:bg-gray-600 rounded-lg py-2 text-xs font-semibold text-gray-200">
+          Kein Assist
+        </button>
+      </div>
+    </div>
 
-      <!-- Goal / Gegengoal buttons + assist prompt -->
-      <div class="mb-2">
-        <div x-show="!assistMode" class="flex gap-2">
-          <button @click="tapGoal()" :disabled="!activePlayer"
-                  class="flex-1 rounded-xl py-3 min-h-[52px] font-bold text-base bg-green-600 text-white
-                         disabled:opacity-25 active:scale-95 transition-transform">
-            ⚽ &nbsp;Goal
-          </button>
-          <button @click="tapGegengoal()"
-                  class="flex-1 rounded-xl py-3 min-h-[52px] font-bold text-base bg-red-700 text-white
-                         active:scale-95 transition-transform">
-            🔴 &nbsp;Gegengoal
-          </button>
+    <!-- ── Gegengoal bar ── -->
+    <div class="fixed bottom-0 left-0 right-0 z-20 bg-gray-900/95 backdrop-blur border-t border-gray-800 px-3 pt-2 pb-safe">
+      <button @click="tapGegengoal()"
+              class="w-full rounded-xl py-3 min-h-[44px] font-bold text-base bg-red-700 text-white active:scale-95 transition-transform">
+        🔴 Gegengoal
+      </button>
+    </div>
+
+    <!-- ── Action bottom sheet ── -->
+    <div x-show="sheetOpen" x-cloak
+         class="fixed inset-0 z-30 bg-black/60"
+         @click.self="sheetOpen = false; activePlayer = null">
+      <div class="absolute bottom-14 left-0 right-0 bg-gray-900 border-t border-gray-700 rounded-t-2xl px-3 pt-4 pb-3"
+           @click.stop>
+        <!-- Player header -->
+        <div class="flex items-center justify-between mb-3">
+          <span class="font-bold text-base">
+            #<span x-text="activePlayer?.nr"></span>
+            <span class="ml-1" x-text="activePlayer?.name"></span>
+          </span>
+          <button @click="sheetOpen = false; activePlayer = null"
+                  class="text-gray-500 text-xl px-2 leading-none">✕</button>
         </div>
-
-        <div x-show="assistMode" class="space-y-1.5">
-          <button @click="goalPowerPlay = !goalPowerPlay"
-                  :class="goalPowerPlay ? 'bg-blue-700/40 border-blue-500 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-500'"
-                  class="w-full border rounded-lg px-3 py-1.5 text-xs font-semibold text-left transition-colors">
-            👤 Überzahl
-          </button>
-          <div class="flex gap-2">
-            <div class="flex-1 bg-yellow-600/20 border border-yellow-600/50 rounded-xl px-3 py-2.5 flex items-center justify-center">
-              <span class="text-yellow-400 text-xs font-bold">Assist tippen — oder:</span>
-            </div>
-            <button @click="skipAssist()"
-                    class="bg-gray-700 active:bg-gray-600 rounded-xl px-4 text-sm font-semibold text-gray-200">
-              Kein Assist
+        <!-- Role-specific action grid -->
+        <div class="grid gap-2 mb-2" :class="isGoalie() ? 'grid-cols-2' : 'grid-cols-3'">
+          <template x-for="action in currentActions()" :key="action.code">
+            <button
+              @click="sendAction(action.code)"
+              :class="[action.bg, action.fg, action.span || '']"
+              class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
+                     active:scale-95 active:bg-gray-700 transition-transform"
+            >
+              <span class="text-xl leading-none" x-text="action.icon"></span>
+              <span class="text-xs font-semibold mt-1 leading-tight" x-text="action.label"></span>
             </button>
-          </div>
+          </template>
         </div>
+        <!-- Goal button -->
+        <button @click="tapGoal()"
+                class="w-full rounded-xl py-3 min-h-[52px] font-bold text-base bg-green-600 text-white active:scale-95 transition-transform">
+          ⚽ Goal
+        </button>
       </div>
-
-      <!-- Role-specific action grid -->
-      <div class="grid gap-2" :class="isGoalie() ? 'grid-cols-2' : 'grid-cols-3'">
-        <template x-for="action in currentActions()" :key="action.code">
-          <button
-            @click="sendAction(action.code)"
-            :disabled="!activePlayer || assistMode"
-            :class="[action.bg, action.fg, action.span || '']"
-            class="flex flex-col items-center justify-center rounded-xl py-3 min-h-[64px] font-bold
-                   disabled:opacity-25 disabled:cursor-not-allowed
-                   active:scale-95 active:bg-gray-700 transition-transform"
-          >
-            <span class="text-xl leading-none" x-text="action.icon"></span>
-            <span class="text-xs font-semibold mt-1 leading-tight" x-text="action.label"></span>
-          </button>
-        </template>
-      </div>
-    </footer>
+    </div>
 
   </div>
 
@@ -359,6 +355,7 @@
         gegentorPrompt:     false,
         pendingGegengoalTs: null,
         goalPowerPlay:      false,
+        sheetOpen:          false,
 
         goalieActions: [
           { code: 'parade',      label: 'Parade',        icon: '🧤', bg: 'bg-gray-800', fg: 'text-gray-100' },
@@ -399,7 +396,13 @@
         },
 
         selectPlayer(player) {
-          this.activePlayer = this.isActive(player) ? null : player;
+          if (this.isActive(player)) {
+            this.activePlayer = null;
+            this.sheetOpen    = false;
+          } else {
+            this.activePlayer = player;
+            this.sheetOpen    = true;
+          }
         },
 
         isActive(player) {
@@ -550,14 +553,16 @@
             action:      code,
             assist:      '',
           };
+          this.sheetOpen = false;
           this._maybePromptOrPost(payload);
         },
 
         // Goal — step 1: lock scorer, enter assist mode
         tapGoal() {
           if (!this.activePlayer) return;
+          this.sheetOpen     = false;
           this.pendingScorer = { ...this.activePlayer };
-          this.pendingTs     = this.formatTimestamp(); // capture time at moment of tap
+          this.pendingTs     = this.formatTimestamp();
           this.activePlayer  = null;
           this.assistMode    = true;
         },
