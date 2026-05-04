@@ -6,6 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#030712" />
   <title>Jets Tracker</title>
+  <script>tailwind.config = { safelist: ['col-span-2', 'grid-cols-2'] }</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
   <style>
@@ -315,7 +316,7 @@
       </div>
 
       <!-- Role-specific action grid -->
-      <div class="gap-2" :class="isGoalie() ? 'grid grid-cols-2' : 'grid grid-cols-3'">
+      <div class="grid gap-2" :class="isGoalie() ? 'grid-cols-2' : 'grid-cols-3'">
         <template x-for="action in currentActions()" :key="action.code">
           <button
             @click="sendAction(action.code)"
