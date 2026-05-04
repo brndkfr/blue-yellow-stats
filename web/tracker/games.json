@@ -16,5 +16,14 @@
     "type":     "test",
     "venue":    "Sporthalle Stighag, Kloten",
     "home":     true
+  },
+  {
+    "file":     "kader_2026-06-30_1730_Pumas.json",
+    "date":     "30.06.2026",
+    "time":     "17:30",
+    "opponent": "Pumas",
+    "type":     "regular",
+    "venue":    "",
+    "home":     true
   }
 ]
