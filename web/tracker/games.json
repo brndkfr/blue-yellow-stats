@@ -6,7 +6,8 @@
     "opponent": "Zürich Dragons",
     "type":     "test",
     "venue":    "Sporthalle Stighag, Kloten",
-    "home":     true
+    "home":     true,
+    "team":     "Jets U14B Blau"
   },
   {
     "file":     "kader_2026-05-15_1130_Eagles.json",
@@ -15,7 +16,8 @@
     "opponent": "Bern Eagles",
     "type":     "test",
     "venue":    "Sporthalle Stighag, Kloten",
-    "home":     true
+    "home":     true,
+    "team":     "Jets U14B Blau"
   },
   {
     "file":     "kader_2026-06-20_1100_Limmattal.json",
@@ -24,7 +26,8 @@
     "opponent": "UHC Limmattal",
     "type":     "test",
     "venue":    "Hüenerweid, Bühlstrasse 2, Dietlikon",
-    "home":     true
+    "home":     true,
+    "team":     "Jets U14B Blau"
   },
   {
     "file":     "kader_2026-06-30_1730_Pumas.json",
@@ -33,6 +36,7 @@
     "opponent": "Pumas",
     "type":     "test",
     "venue":    "Hüenerweid, Bühlstrasse 2, Dietlikon",
-    "home":     true
+    "home":     true,
+    "team":     "Jets U14B Blau"
   }
 ]

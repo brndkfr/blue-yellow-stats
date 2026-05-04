@@ -4,13 +4,14 @@
     "date":               "15.05.2026",
     "time":               "10:00",
     "opponent":           "Zürich Dragons",
-    "type":               "test",
+    "type":               "demo",
     "venue":              "Sporthalle Stighag, Kloten",
     "home":               true,
     "format":             2,
     "minutes_per_period": 20,
     "script_url":         "https://script.google.com/macros/s/AKfycbxoXeOhJ1F_eRAMnN5nVECZlgf0Hc1OINNdGvlD1ljGHuiJ1w7mpzlStwLJ2XqhCdI0/exec",
-    "scouts":             ["Bernd K.", "Thomas M."]
+    "scouts":             ["Bernd K.", "Thomas M."],
+    "team":              "Jets U14B Blau"
   },
   "goalies": [
     { "nr": 18, "name": "Ben Uriel K." },

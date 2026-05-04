@@ -10,7 +10,8 @@
     "format":             2,
     "minutes_per_period": 20,
     "script_url":         "https://script.google.com/macros/s/AKfycbxoXeOhJ1F_eRAMnN5nVECZlgf0Hc1OINNdGvlD1ljGHuiJ1w7mpzlStwLJ2XqhCdI0/exec",
-    "scouts":             ["Roland", "Bernd", "Marvin", "Daniel", "Freiwilliger"]
+    "scouts":             ["Roland", "Bernd", "Marvin", "Daniel", "Freiwilliger"],
+    "team":              "Jets U14B Blau"
   },
   "goalies": [
     { "nr": 18, "name": "Ben Uriel K." },
