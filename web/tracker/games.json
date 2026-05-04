@@ -18,6 +18,15 @@
     "home":     true
   },
   {
+    "file":     "kader_2026-06-20_1100_Limmattal.json",
+    "date":     "20.06.2026",
+    "time":     "11:00",
+    "opponent": "UHC Limmattal",
+    "type":     "test",
+    "venue":    "",
+    "home":     true
+  },
+  {
     "file":     "kader_2026-06-30_1730_Pumas.json",
     "date":     "30.06.2026",
     "time":     "17:30",
