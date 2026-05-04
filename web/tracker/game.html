@@ -409,11 +409,11 @@
           return this.activePlayer?.nr === player.nr;
         },
 
-        // Wall-clock timestamp: yyyy-dd-mm_HH.MM.SS
+        // Wall-clock timestamp: yyyy-mm-dd HH:MM:SS
         formatTimestamp() {
           const n = new Date();
           const p = (v) => String(v).padStart(2, '0');
-          return `${n.getFullYear()}-${p(n.getDate())}-${p(n.getMonth()+1)}_${p(n.getHours())}.${p(n.getMinutes())}.${p(n.getSeconds())}`;
+          return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
         },
 
         isGoalie() {
