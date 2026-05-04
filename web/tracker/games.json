@@ -4,7 +4,7 @@
     "date":     "15.05.2026",
     "time":     "10:00",
     "opponent": "Zürich Dragons",
-    "type":     "test",
+    "type":     "demo",
     "venue":    "Sporthalle Stighag, Kloten",
     "home":     true,
     "team":     "Jets U14B Blau"
@@ -14,7 +14,7 @@
     "date":     "15.05.2026",
     "time":     "11:30",
     "opponent": "Bern Eagles",
-    "type":     "test",
+    "type":     "demo",
     "venue":    "Sporthalle Stighag, Kloten",
     "home":     true,
     "team":     "Jets U14B Blau"
