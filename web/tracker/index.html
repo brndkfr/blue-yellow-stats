@@ -38,14 +38,48 @@
 
     <div x-show="!loading && !error" x-cloak>
 
+      <!-- Today's games -->
+      <section x-show="today.length > 0">
+        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Heute</p>
+        <div class="space-y-2">
+          <template x-for="game in today" :key="game.file">
+            <a :href="'game.html?kader=' + game.file"
+               class="block rounded-2xl px-4 py-3 border-l-4 border-blue-500 bg-gray-800 active:bg-gray-700 transition-colors">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                    <span class="text-xs font-bold text-yellow-400" x-text="game.time"></span>
+                    <span
+                      :class="game.home ? 'bg-blue-900 text-blue-300' : 'bg-gray-700 text-gray-400'"
+                      class="text-xs px-1.5 py-0.5 rounded font-medium"
+                      x-text="game.home ? 'Heim' : 'Auswärts'"
+                    ></span>
+                    <span
+                      :class="typeBadge(game.type).cls"
+                      class="text-xs px-1.5 py-0.5 rounded font-medium"
+                      x-text="typeBadge(game.type).label"
+                    ></span>
+                    <span
+                      x-show="Date.now() >= game._date.getTime() && Date.now() < game._date.getTime() + 90*60*1000"
+                      class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">Jetzt</span>
+                  </div>
+                  <p class="font-bold text-base leading-tight" x-text="game.opponent"></p>
+                  <p class="text-xs text-gray-500 mt-0.5 truncate" x-text="game.venue"></p>
+                </div>
+                <span class="text-gray-400 text-2xl flex-shrink-0 mt-0.5">›</span>
+              </div>
+            </a>
+          </template>
+        </div>
+      </section>
+
       <!-- Upcoming games -->
       <section x-show="upcoming.length > 0">
         <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Nächste Spiele</p>
         <div class="space-y-2">
-          <template x-for="(game, i) in upcoming" :key="game.file">
+          <template x-for="game in upcoming" :key="game.file">
             <a :href="'game.html?kader=' + game.file"
-               :class="i === 0 ? 'border-l-4 border-blue-500 bg-gray-800' : 'bg-gray-800/60'"
-               class="block rounded-2xl px-4 py-3 active:bg-gray-700 transition-colors">
+               class="block rounded-2xl px-4 py-3 bg-gray-800/60 active:bg-gray-700 transition-colors">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -61,12 +95,11 @@
                       class="text-xs px-1.5 py-0.5 rounded font-medium"
                       x-text="typeBadge(game.type).label"
                     ></span>
-                    <span x-show="i === 0" class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">Jetzt</span>
                   </div>
                   <p class="font-bold text-base leading-tight" x-text="game.opponent"></p>
                   <p class="text-xs text-gray-500 mt-0.5 truncate" x-text="game.venue"></p>
                 </div>
-                <span class="text-gray-500 text-lg flex-shrink-0 mt-1">→</span>
+                <span class="text-gray-500 text-2xl flex-shrink-0 mt-0.5">›</span>
               </div>
             </a>
           </template>
@@ -90,7 +123,7 @@
                   <p class="font-semibold text-sm text-gray-400" x-text="game.opponent"></p>
                   <p class="text-xs text-gray-600 mt-0.5 truncate" x-text="game.venue"></p>
                 </div>
-                <span class="text-gray-700 flex-shrink-0 mt-1">→</span>
+                <span class="text-gray-700 text-2xl flex-shrink-0 mt-0.5">›</span>
               </div>
             </a>
           </template>
@@ -98,7 +131,7 @@
       </section>
 
       <!-- No games yet -->
-      <section x-show="upcoming.length === 0 && past.length === 0">
+      <section x-show="today.length === 0 && upcoming.length === 0 && past.length === 0">
         <p class="text-gray-600 text-sm text-center pt-12">Keine Spiele in games.json eingetragen.</p>
       </section>
 
@@ -171,6 +204,7 @@
       return {
         loading:  true,
         error:    null,
+        today:    [],
         upcoming: [],
         past:     [],
 
@@ -191,21 +225,25 @@
             if (!res.ok) throw new Error(`games.json nicht gefunden (HTTP ${res.status})`);
             const games = await res.json();
 
-            const now = Date.now();
-            const GAME_DURATION_MS = 90 * 60 * 1000;
+            const now     = new Date();
+            const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const tomorrowMs = todayMs + 86_400_000;
 
             const tagged = games.map(g => ({
               ...g,
               _date: this._parseDate(g.date, g.time),
             }));
 
-            // A game is "over" once its start time + 90 min has passed
+            this.today = tagged
+              .filter(g => g._date.getTime() >= todayMs && g._date.getTime() < tomorrowMs)
+              .sort((a, b) => a._date - b._date);
+
             this.upcoming = tagged
-              .filter(g => g._date.getTime() + GAME_DURATION_MS > now)
+              .filter(g => g._date.getTime() >= tomorrowMs)
               .sort((a, b) => a._date - b._date);
 
             this.past = tagged
-              .filter(g => g._date.getTime() + GAME_DURATION_MS <= now)
+              .filter(g => g._date.getTime() < todayMs)
               .sort((a, b) => b._date - a._date);
 
           } catch (err) {
