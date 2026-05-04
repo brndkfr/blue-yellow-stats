@@ -40,7 +40,7 @@
 
       <!-- Today's games -->
       <section x-show="today.length > 0">
-        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Heute</p>
+        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Heute</p>
         <div class="space-y-2">
           <template x-for="game in today" :key="game.file">
             <a :href="'game.html?kader=' + game.file"
@@ -75,7 +75,7 @@
 
       <!-- Upcoming games -->
       <section x-show="upcoming.length > 0">
-        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Nächste Spiele</p>
+        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Nächste Spiele</p>
         <div class="space-y-2">
           <template x-for="game in upcoming" :key="game.file">
             <a :href="'game.html?kader=' + game.file"
@@ -108,7 +108,7 @@
 
       <!-- Past games -->
       <section x-show="past.length > 0">
-        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Vergangene Spiele</p>
+        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Vergangene Spiele</p>
         <div class="space-y-2">
           <template x-for="game in past" :key="game.file">
             <a :href="'game.html?kader=' + game.file"
@@ -137,7 +137,7 @@
 
       <!-- Vollkader divider -->
       <div class="border-t border-gray-800 pt-4">
-        <p class="text-xs text-gray-600 uppercase tracking-widest mb-3">Kader</p>
+        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Kader</p>
         <a href="game.html"
            class="block rounded-2xl px-4 py-3 bg-gray-800/40 active:bg-gray-700 transition-colors">
           <div class="flex items-center justify-between">
@@ -154,7 +154,7 @@
       <div x-data="{ open: false }" class="border-t border-gray-800 pt-4">
         <button @click="open = !open"
                 class="w-full flex items-center justify-between text-left">
-          <p class="text-xs text-gray-600 uppercase tracking-widest">Hilfe</p>
+          <p class="text-sm text-gray-500 uppercase tracking-widest">Hilfe</p>
           <span class="text-gray-600 text-sm transition-transform duration-200"
                 :class="open ? 'rotate-180' : ''" style="display:inline-block">▾</span>
         </button>
