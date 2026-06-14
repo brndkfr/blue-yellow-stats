@@ -140,8 +140,8 @@ function _splitSquad(squadRows) {
     if (String(r.type).toLowerCase() === 'goalie') goalies.push(obj);
     else players.push(obj);
   });
-  goalies.sort((a, b) => a.nr - b.nr);
-  players.sort((a, b) => a.nr - b.nr);
+  goalies.sort((a, b) => a.name.localeCompare(b.name));
+  players.sort((a, b) => a.name.localeCompare(b.name));
   return { goalies, players };
 }
 
