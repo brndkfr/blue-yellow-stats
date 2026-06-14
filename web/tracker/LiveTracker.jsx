@@ -237,6 +237,13 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   });
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
   const [confirmLeave, setConfirmLeave] = React.useState(false);
+
+  // Hide the external scout bar while tracking — scout is shown in the header pill
+  React.useEffect(() => {
+    const bar = document.getElementById('scout-bar');
+    if (bar) bar.style.display = 'none';
+    return () => { if (bar) bar.style.display = ''; };
+  }, []);
   const toastTimer = React.useRef(null);
   const flushRef   = React.useRef(null);
 
@@ -432,8 +439,8 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 color: "#fff",
               }}>Jets · {game.opponent}</p>
-              <p style={{ margin: 0, fontSize: "0.6875rem", color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                {game.venue || "Vollkader"}
+              <p style={{ margin: 0, fontSize: "0.6875rem", color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", gap: "0.35rem", overflow: "hidden" }}>
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{game.venue || "Vollkader"}</span>
                 {scout && (
                   <span style={{
                     display: "inline-flex", alignItems: "center", gap: "0.2rem",
