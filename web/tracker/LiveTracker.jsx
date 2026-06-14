@@ -236,6 +236,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
     return r;
   });
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
+  const [confirmLeave, setConfirmLeave] = React.useState(false);
   const toastTimer = React.useRef(null);
   const flushRef   = React.useRef(null);
 
@@ -418,7 +419,13 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
         {/* Row 1: back + title | score | help */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: 1 }}>
-            <IconBtn name="chevron-left" onClick={onBack} label="Zurück zu Spielen" />
+            <IconBtn name="chevron-left" label="Zurück zu Spielen" onClick={() => {
+              if (game.id && (score.us + score.them > 0 || lastEvent !== null)) {
+                setConfirmLeave(true);
+              } else {
+                onBack();
+              }
+            }} />
             <div style={{ minWidth: 0 }}>
               <p style={{
                 margin: 0, fontWeight: 700, fontSize: "0.875rem",
@@ -524,7 +531,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
             gap: "0.4rem", fontSize: "0.75rem", fontWeight: 600, color: "#ffcd00",
           }}>
             <Icon name="goal" size={15} color="#ffcd00" />
-            #{assistFor.nr} {assistFor.name} — Assist tippen oder:
+            {assistFor.nr ? `#${assistFor.nr} ` : ""}{assistFor.name} — Assist tippen oder:
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button onClick={() => setPowerPlay(!powerPlay)} style={{
@@ -542,6 +549,17 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
             <Button variant="secondary" size="md" fullWidth onClick={skipAssist} style={{ flex: 1 }}>
               Kein Assist
             </Button>
+            <button onClick={() => { setAssistFor(null); setActive(assistFor); }} style={{
+              appearance: "none", cursor: "pointer",
+              width: "2.75rem", flexShrink: 0,
+              borderRadius: "var(--radius-lg)",
+              background: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.1)",
+              display: "grid", placeItems: "center",
+              touchAction: "manipulation",
+            }} aria-label="Abbrechen">
+              <Icon name="x" size={16} color="rgba(255,255,255,.4)" strokeWidth={2} />
+            </button>
           </div>
         </div>
       )}
@@ -767,6 +785,33 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
                   </div>
                 </div>
               ))}
+            </div>
+          </SheetSurface>
+        </Scrim>
+      )}
+
+      {/* ── Confirm leave ── */}
+      {confirmLeave && (
+        <Scrim onClose={() => setConfirmLeave(false)}>
+          <SheetSurface>
+            <Grabber />
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              fontWeight: 700, fontSize: "0.9375rem", marginBottom: "0.5rem",
+            }}>
+              <Icon name="log-out" size={17} color="rgba(255,255,255,.6)" />
+              Spiel verlassen?
+            </div>
+            <p style={{ margin: "0 0 1rem", fontSize: "0.8125rem", color: "rgba(255,255,255,.4)" }}>
+              Alle Ereignisse wurden bereits gesendet.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <Button variant="secondary" size="md" fullWidth onClick={() => setConfirmLeave(false)}>
+                Weiter tracken
+              </Button>
+              <Button variant="danger" size="md" fullWidth onClick={onBack}>
+                Verlassen
+              </Button>
             </div>
           </SheetSurface>
         </Scrim>

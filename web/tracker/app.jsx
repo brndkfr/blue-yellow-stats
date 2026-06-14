@@ -169,6 +169,7 @@ function App() {
   const [initialRoles,  setInitialRoles] = React.useState({});
   const [editingGame,   setEditingGame]  = React.useState(null);
   const [editRoster,    setEditRoster]   = React.useState(null);
+  const [showSettings,  setShowSettings] = React.useState(false);
 
   // Load squad + games from Sheets whenever scriptUrl is set
   React.useEffect(() => {
@@ -337,12 +338,79 @@ function App() {
       onBack={() => setScreen('schedule')}
     />;
   }
-  return <Schedule
-    games={games}
-    onOpen={openGame}
-    onEdit={handleEditGame}
-    onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
-  />;
+  const shortUrl = scriptUrl.replace(/^https:\/\/script\.google\.com\/macros\/s\//, '').slice(0, 24) + '…';
+
+  return (
+    <div style={{ position: 'absolute', inset: 0 }}>
+      <Schedule
+        games={games}
+        onOpen={openGame}
+        onEdit={handleEditGame}
+        onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
+        onSettings={() => setShowSettings(true)}
+      />
+
+      {/* Settings sheet */}
+      {showSettings && (
+        <div onClick={() => setShowSettings(false)} style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          padding: '0 0.75rem 0.75rem',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            width: '100%',
+            background: '#0b1120',
+            border: '1px solid rgba(255,255,255,.09)',
+            borderRadius: 'var(--radius-2xl)',
+            padding: '0.75rem 0.85rem 1rem',
+            boxShadow: '0 -16px 48px rgba(0,0,0,.6)',
+            display: 'flex', flexDirection: 'column', gap: '0.75rem',
+          }}>
+            <div style={{ width: '2rem', height: '3px', background: 'rgba(255,255,255,.15)', borderRadius: '2px', margin: '0 auto 0.25rem' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Icon name="settings" size={16} color="rgba(255,255,255,.4)" strokeWidth={2} />
+              <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#fff' }}>Einstellungen</span>
+            </div>
+            <div style={{
+              background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 'var(--radius-lg)', padding: '0.6rem 0.85rem',
+            }}>
+              <p style={{ margin: '0 0 0.15rem', fontSize: '0.6875rem', fontWeight: 600,
+                textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,.3)' }}>
+                Script URL
+              </p>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'rgba(255,255,255,.5)',
+                fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                {shortUrl}
+              </p>
+            </div>
+            <button onClick={() => { setShowSettings(false); setRefreshKey((k) => k + 1); }} style={{
+              appearance: 'none', cursor: 'pointer', width: '100%',
+              display: 'flex', alignItems: 'center', gap: '0.75rem',
+              background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 'var(--radius-lg)', padding: '0.75rem 0.85rem',
+              fontFamily: 'var(--font-sans)', touchAction: 'manipulation',
+            }}>
+              <Icon name="refresh-cw" size={16} color="#93c5fd" strokeWidth={2} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#fff' }}>Daten neu laden</span>
+            </button>
+            <button onClick={() => { localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); setShowSettings(false); }} style={{
+              appearance: 'none', cursor: 'pointer', width: '100%',
+              display: 'flex', alignItems: 'center', gap: '0.75rem',
+              background: 'rgba(185,28,28,.1)', border: '1px solid rgba(239,68,68,.22)',
+              borderRadius: 'var(--radius-lg)', padding: '0.75rem 0.85rem',
+              fontFamily: 'var(--font-sans)', touchAction: 'manipulation',
+            }}>
+              <Icon name="link-2-off" size={16} color="#f87171" strokeWidth={2} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#f87171' }}>URL ändern</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);

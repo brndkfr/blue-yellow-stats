@@ -5,7 +5,7 @@
 const SCHED_CHROME_BG  = "rgba(1,9,35,.95)";
 const SCHED_GOLD_LINE  = "1px solid rgba(255,205,0,.2)";
 
-function ScheduleHeader({ onNewGame }) {
+function ScheduleHeader({ onNewGame, onSettings }) {
   return (
     <header style={{
       flexShrink: 0, zIndex: 10,
@@ -34,8 +34,8 @@ function ScheduleHeader({ onNewGame }) {
 
       {/* Header actions */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        {/* Calendar */}
-        <button style={{
+        {/* Settings */}
+        <button onClick={onSettings} title="Einstellungen" style={{
           appearance: "none", cursor: "pointer",
           width: "2.25rem", height: "2.25rem",
           borderRadius: "var(--radius-pill)",
@@ -44,7 +44,7 @@ function ScheduleHeader({ onNewGame }) {
           display: "grid", placeItems: "center",
           color: "rgba(255,255,255,.55)",
         }}>
-          <Icon name="calendar-days" size={17} strokeWidth={2} />
+          <Icon name="settings" size={17} strokeWidth={2} />
         </button>
 
         {/* New game */}
@@ -88,7 +88,7 @@ function GameCardRow({ game, emphasis, onOpen, onEdit }) {
   );
 }
 
-function Schedule({ games, onOpen, onEdit, onNewGame }) {
+function Schedule({ games, onOpen, onEdit, onNewGame, onSettings }) {
   const today    = games.filter((g) => g.group === "today");
   const upcoming = games.filter((g) => g.group === "upcoming");
   const past     = games.filter((g) => g.group === "past");
@@ -99,7 +99,7 @@ function Schedule({ games, onOpen, onEdit, onNewGame }) {
       display: "flex", flexDirection: "column",
       background: "var(--bg-app)", color: "#fff",
     }}>
-      <ScheduleHeader onNewGame={onNewGame} />
+      <ScheduleHeader onNewGame={onNewGame} onSettings={onSettings} />
 
       <main style={{
         flex: 1, overflowY: "auto",
