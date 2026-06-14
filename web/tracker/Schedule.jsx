@@ -146,6 +146,29 @@ function Schedule({ games, onOpen, onEdit, onNewGame, onSettings, onEditSquad })
           </section>
         )}
 
+        {/* Empty state */}
+        {today.length === 0 && upcoming.length === 0 && past.length === 0 && (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: "0.75rem", padding: "2.5rem 1rem", textAlign: "center",
+          }}>
+            <span style={{
+              display: "grid", placeItems: "center",
+              width: "3rem", height: "3rem", borderRadius: "var(--radius-lg)",
+              background: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.07)",
+            }}>
+              <Icon name="calendar-x" size={20} color="rgba(255,255,255,.2)" />
+            </span>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9375rem", color: "rgba(255,255,255,.5)" }}>
+              Noch keine Spiele
+            </p>
+            <p style={{ margin: 0, fontSize: "0.8125rem", color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>
+              Neues Spiel über das + Symbol anlegen oder Daten neu laden.
+            </p>
+          </div>
+        )}
+
         {/* Kader */}
         <div style={{
           borderTop: "1px solid rgba(255,255,255,.07)",

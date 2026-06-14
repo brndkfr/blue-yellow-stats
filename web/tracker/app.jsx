@@ -206,10 +206,12 @@ function App() {
   async function openGame(g) {
     if (!g) {
       // "Quick track" with full squad, no saved roster
+      const squadRoles = {};
+      players.forEach((p) => { if (p.role) squadRoles[p.id] = p.role; });
       setGame({ id: '', opponent: 'Vollkader', format: 2 });
       setActiveGoalies(goalies);
       setActivePlayers(players);
-      setInitialRoles({});
+      setInitialRoles(squadRoles);
       setScreen('tracker');
       return;
     }
