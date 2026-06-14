@@ -1,260 +1,150 @@
+<!-- @dsCard group="Tracker" viewport="390x760" name="Live Tracker — full app" subtitle="Modern icon-based: schedule → live scouting → goal flow" -->
+<!-- @startingPoint section="Tracker" subtitle="Interactive live game tracker (mobile)" viewport="390x760" -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#030712" />
-  <title>Jets Tracker</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
-  <style>
-    button { touch-action: manipulation; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jets Tracker</title>
+<link rel="stylesheet" href="./styles.css" />
+<style>
+  html, body { margin: 0; min-height: 100%; background: #000; }
+
+  .stage {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px; box-sizing: border-box; gap: 14px;
+  }
+
+  /* ── Scout bar ── */
+  #scout-bar {
+    width: 390px; max-width: 100%;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  #scout-bar .sb-label {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: rgba(255,255,255,.28);
+    white-space: nowrap;
+  }
+  #scout-bar .sb-btn {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px; font-weight: 600;
+    padding: 6px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.15);
+    background: rgba(255,255,255,.06); color: rgba(255,255,255,.55);
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+    white-space: nowrap;
+  }
+  #scout-bar .sb-btn:hover  { background: rgba(255,255,255,.1); color: #fff; }
+  #scout-bar .sb-btn.active {
+    background: rgba(255,205,0,.15); color: #ffcd00;
+    border-color: rgba(255,205,0,.45);
+  }
+  #scout-input {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.07); color: #fff; outline: none;
+    width: 160px;
+  }
+  #scout-input::placeholder { color: rgba(255,255,255,.25); }
+  #scout-input:focus { border-color: rgba(255,205,0,.5); background: rgba(255,205,0,.06); }
+
+  /* ── Phone frame ── */
+  .phone {
+    width: 390px; height: 760px; position: relative; overflow: hidden;
+    border-radius: 44px; background: var(--bg-app);
+    box-shadow: 0 0 0 11px #0b0e16, 0 0 0 13px #20242e, 0 40px 80px -24px rgba(0,0,0,.85);
+    flex-shrink: 0;
+  }
+  .screen { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .screen::-webkit-scrollbar { width: 0; }
+</style>
+<script src="./config.js"></script>
+<script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
-<body class="bg-gray-950 text-white min-h-screen"
-      x-data="selector()"
-      x-init="init()">
+<body>
+  <div class="stage">
 
-  <!-- Fixed header -->
-  <header class="fixed top-0 left-0 right-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-3">
-    <div class="flex items-baseline gap-2">
-      <span class="font-black text-lg text-blue-500">Jets</span>
-      <span class="text-gray-400 text-sm font-medium">Spiele</span>
-    </div>
-  </header>
-
-  <main class="pt-16 pb-8 px-4 space-y-6">
-
-    <!-- Loading -->
-    <div x-show="loading" class="flex items-center justify-center pt-20">
-      <p class="text-gray-600 text-sm">Lade Spielplan…</p>
+    <!-- Scout bar — outside the React app, vanilla JS -->
+    <div id="scout-bar">
+      <span class="sb-label">Scout</span>
+      <span id="scout-btns" style="display:contents"></span>
+      <input id="scout-input" type="text" placeholder="Name eingeben…" />
     </div>
 
-    <!-- Error -->
-    <div x-show="!loading && error" class="flex items-center justify-center pt-20 px-4">
-      <p class="text-red-400 text-sm text-center" x-text="error"></p>
-    </div>
-
-    <div x-show="!loading && !error" x-cloak>
-
-      <!-- Today's games -->
-      <section x-show="today.length > 0">
-        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Heute</p>
-        <div class="space-y-2">
-          <template x-for="game in today" :key="game.file">
-            <a :href="'game.html?kader=' + game.file"
-               class="block rounded-2xl px-4 py-3 border-l-4 border-blue-500 bg-gray-800 active:bg-gray-700 transition-colors">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                    <span class="text-xs font-bold text-yellow-400" x-text="game.time"></span>
-                    <span
-                      :class="game.home ? 'bg-blue-900 text-blue-300' : 'bg-gray-700 text-gray-400'"
-                      class="text-xs px-1.5 py-0.5 rounded font-medium"
-                      x-text="game.home ? 'Heim' : 'Auswärts'"
-                    ></span>
-                    <span
-                      :class="typeBadge(game.type).cls"
-                      class="text-xs px-1.5 py-0.5 rounded font-medium"
-                      x-text="typeBadge(game.type).label"
-                    ></span>
-                    <span
-                      x-show="Date.now() >= game._date.getTime() && Date.now() < game._date.getTime() + 90*60*1000"
-                      class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">Jetzt</span>
-                  </div>
-                  <p class="font-bold text-base leading-tight" x-text="game.opponent"></p>
-                  <p class="text-xs text-gray-500 mt-0.5 truncate" x-text="game.venue"></p>
-                </div>
-                <span class="text-gray-400 text-2xl flex-shrink-0 mt-0.5">›</span>
-              </div>
-            </a>
-          </template>
-        </div>
-      </section>
-
-      <!-- Upcoming games -->
-      <section x-show="upcoming.length > 0">
-        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Nächste Spiele</p>
-        <div class="space-y-2">
-          <template x-for="game in upcoming" :key="game.file">
-            <a :href="'game.html?kader=' + game.file"
-               class="block rounded-2xl px-4 py-3 bg-gray-800/60 active:bg-gray-700 transition-colors">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                    <span class="text-xs text-gray-400" x-text="game.date"></span>
-                    <span class="text-xs font-bold text-yellow-400" x-text="game.time"></span>
-                    <span
-                      :class="game.home ? 'bg-blue-900 text-blue-300' : 'bg-gray-700 text-gray-400'"
-                      class="text-xs px-1.5 py-0.5 rounded font-medium"
-                      x-text="game.home ? 'Heim' : 'Auswärts'"
-                    ></span>
-                    <span
-                      :class="typeBadge(game.type).cls"
-                      class="text-xs px-1.5 py-0.5 rounded font-medium"
-                      x-text="typeBadge(game.type).label"
-                    ></span>
-                  </div>
-                  <p class="font-bold text-base leading-tight" x-text="game.opponent"></p>
-                  <p class="text-xs text-gray-500 mt-0.5 truncate" x-text="game.venue"></p>
-                </div>
-                <span class="text-gray-500 text-2xl flex-shrink-0 mt-0.5">›</span>
-              </div>
-            </a>
-          </template>
-        </div>
-      </section>
-
-      <!-- Past games -->
-      <section x-show="past.length > 0">
-        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Vergangene Spiele</p>
-        <div class="space-y-2">
-          <template x-for="game in past" :key="game.file">
-            <a :href="'game.html?kader=' + game.file"
-               class="block rounded-2xl px-4 py-3 bg-gray-800/30 opacity-50 active:opacity-70 transition-opacity">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 mb-0.5">
-                    <span class="text-xs text-gray-500" x-text="game.date"></span>
-                    <span class="text-xs text-gray-500" x-text="game.time"></span>
-                    <span class="text-xs text-gray-600" x-text="game.home ? 'Heim' : 'Auswärts'"></span>
-                  </div>
-                  <p class="font-semibold text-sm text-gray-400" x-text="game.opponent"></p>
-                  <p class="text-xs text-gray-600 mt-0.5 truncate" x-text="game.venue"></p>
-                </div>
-                <span class="text-gray-700 text-2xl flex-shrink-0 mt-0.5">›</span>
-              </div>
-            </a>
-          </template>
-        </div>
-      </section>
-
-      <!-- No games yet -->
-      <section x-show="today.length === 0 && upcoming.length === 0 && past.length === 0">
-        <p class="text-gray-600 text-sm text-center pt-12">Keine Spiele in games.json eingetragen.</p>
-      </section>
-
-      <!-- Vollkader divider -->
-      <div class="border-t border-gray-800 pt-4">
-        <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">Kader</p>
-        <a href="game.html"
-           class="block rounded-2xl px-4 py-3 bg-gray-800/40 active:bg-gray-700 transition-colors">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="font-semibold text-sm text-gray-300">Vollkader</p>
-              <p class="text-xs text-gray-600 mt-0.5">Alle 30 Spieler — ohne Spielauswahl</p>
-            </div>
-            <span class="text-gray-600">→</span>
-          </div>
-        </a>
-      </div>
-
-      <!-- Hilfe -->
-      <div x-data="{ open: false }" class="border-t border-gray-800 pt-4">
-        <button @click="open = !open"
-                class="w-full flex items-center justify-between text-left">
-          <p class="text-sm text-gray-500 uppercase tracking-widest">Hilfe</p>
-          <span class="text-gray-600 text-sm transition-transform duration-200"
-                :class="open ? 'rotate-180' : ''" style="display:inline-block">▾</span>
-        </button>
-        <div x-show="open" class="mt-3 space-y-3 text-xs text-gray-400">
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Spieler auswählen</p>
-            <p>Im Kader den gewünschten Spieler antippen — er wird gelb markiert. Nochmal tippen zum Abwählen.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Aktion erfassen</p>
-            <p>Eine der sechs Aktionen unten antippen: 🔄 Ballgewinn · 🛡️ Abwehr · 🔑 Schlüsselpass · 🎯 Torschuss · 🧤 Topparade · ⚠️ Ballverlust.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Tor erfassen</p>
-            <p>Torschützen wählen → ⚽ Tor-Button tippen → Assistspieler antippen oder «Kein Assist» wählen.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Scout</p>
-            <p>Oben im Dropdown den eigenen Namen wählen, damit später klar ist wer was erfasst hat.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Kein Netz? Kein Stress.</p>
-            <p>Aktionen werden lokal gespeichert und automatisch nachgesendet sobald Verbindung besteht. Der rote Badge oben zeigt wie viele noch ausstehend sind.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Falsch getippt?</p>
-            <p>Die letzte Aktion mit ↩ Rückgängig korrigieren.</p>
-          </div>
-          <div>
-            <p class="font-semibold text-gray-200 mb-0.5">Nachtrag</p>
-            <p>Einträge die mehr als 2 Stunden nach Spielbeginn erfasst werden, fordern automatisch einen kurzen Kommentar.</p>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </main>
+    <div class="phone"><div class="screen" id="root"></div></div>
+  </div>
 
   <script>
-    const TYPE_LABELS = {
-      regular: { label: 'Meisterschaft', cls: 'bg-gray-700 text-gray-300'      },
-      cup:     { label: 'Cup',           cls: 'bg-yellow-700 text-yellow-200'   },
-      test:    { label: 'Testspiel',     cls: 'bg-purple-900 text-purple-300'   },
-      demo:    { label: 'Demo',          cls: 'bg-teal-900 text-teal-300'       },
-    };
+    (function () {
+      const LS_URL    = 'jets_script_url';
+      const LS_SCOUT  = 'jets_scout';
+      const btnsEl    = document.getElementById('scout-btns');
+      const inputEl   = document.getElementById('scout-input');
 
-    function selector() {
-      return {
-        loading:  true,
-        error:    null,
-        today:    [],
-        upcoming: [],
-        past:     [],
+      let currentScout = localStorage.getItem(LS_SCOUT) || '';
+      if (currentScout) inputEl.value = currentScout;
 
-        typeBadge(type) {
-          return TYPE_LABELS[type] ?? { label: type || '—', cls: 'bg-gray-700 text-gray-400' };
-        },
+      function selectScout(name) {
+        currentScout = name;
+        localStorage.setItem(LS_SCOUT, name);
+        inputEl.value = name;
+        document.querySelectorAll('.sb-btn').forEach((b) => {
+          b.classList.toggle('active', b.dataset.name === name);
+        });
+      }
 
-        // Parse "DD.MM.YYYY" + "HH:MM" into a Date
-        _parseDate(dateStr, timeStr) {
-          const [dd, mm, yyyy] = dateStr.split('.');
-          const [hh, min]      = timeStr.split(':');
-          return new Date(+yyyy, +mm - 1, +dd, +hh, +min);
-        },
+      function renderButtons(names) {
+        btnsEl.innerHTML = '';
+        names.forEach((name) => {
+          const btn = document.createElement('button');
+          btn.className = 'sb-btn' + (name === currentScout ? ' active' : '');
+          btn.textContent = name;
+          btn.dataset.name = name;
+          btn.addEventListener('click', () => selectScout(name));
+          btnsEl.appendChild(btn);
+        });
+        // If current scout isn't in the list, still show it as active in the input
+        if (currentScout && !names.includes(currentScout)) {
+          inputEl.value = currentScout;
+        }
+      }
 
-        async init() {
-          try {
-            const res = await fetch('./games.json');
-            if (!res.ok) throw new Error(`games.json nicht gefunden (HTTP ${res.status})`);
-            const games = await res.json();
+      // Free-text fallback — typing in the input also sets the scout
+      inputEl.addEventListener('change', () => {
+        const name = inputEl.value.trim();
+        if (name) selectScout(name);
+      });
 
-            const now     = new Date();
-            const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-            const tomorrowMs = todayMs + 86_400_000;
+      // Config file takes priority over localStorage; sync to localStorage so the app picks it up
+      const configUrl = window.JETS_CONFIG && window.JETS_CONFIG.scriptUrl;
+      if (configUrl) localStorage.setItem(LS_URL, configUrl);
 
-            const tagged = games.map(g => ({
-              ...g,
-              _date: this._parseDate(g.date, g.time),
-            }));
-
-            this.today = tagged
-              .filter(g => g._date.getTime() >= todayMs && g._date.getTime() < tomorrowMs)
-              .sort((a, b) => a._date - b._date);
-
-            this.upcoming = tagged
-              .filter(g => g._date.getTime() >= tomorrowMs)
-              .sort((a, b) => a._date - b._date);
-
-            this.past = tagged
-              .filter(g => g._date.getTime() < todayMs)
-              .sort((a, b) => b._date - a._date);
-
-          } catch (err) {
-            this.error = err.message;
-          } finally {
-            this.loading = false;
-          }
-        },
-      };
-    }
+      // Load scout list from Google Sheets if URL is configured
+      const scriptUrl = configUrl || localStorage.getItem(LS_URL);
+      if (scriptUrl) {
+        fetch(scriptUrl + '?action=scouts')
+          .then((r) => r.json())
+          .then((rows) => {
+            const names = rows.map((r) => r.name).filter(Boolean);
+            if (names.length) renderButtons(names);
+          })
+          .catch(() => {}); // silently fall back to text input
+      }
+    })();
   </script>
+
+  <script type="text/babel" src="primitives.jsx"></script>
+  <script type="text/babel" src="Schedule.jsx"></script>
+  <script type="text/babel" src="LiveTracker.jsx"></script>
+  <script type="text/babel" src="RosterEditor.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>

@@ -1,0 +1,10 @@
+/* ============================================================
+   Jets Tracker Design System — global entry point
+   Consumers link THIS file. It is an import manifest only:
+   all real declarations live in the token files below.
+   Brand: Kloten-Dietlikon Jets (Swiss Unihockey / floorball)
+   ============================================================ */
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/spacing.css";
+@import "tokens/radii.css";
