@@ -145,19 +145,19 @@ function CountBadge({ selected, total }) {
   );
 }
 
+/* ── helpers ── */
+function _toIso(raw) {
+  if (!raw) return "";
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
+    const [d, m, y] = raw.split(".");
+    return `${y}-${m}-${d}`;
+  }
+  return raw;
+}
+
 /* ── RosterEditor ── */
 function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster, onSave, onBack }) {
   const isEdit = Boolean(initialGame && initialGame.id);
-
-  // Parse initialGame date from DD.MM.YYYY or YYYY-MM-DD to YYYY-MM-DD for <input type=date>
-  function _toIso(raw) {
-    if (!raw) return "";
-    if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
-      const [d, m, y] = raw.split(".");
-      return `${y}-${m}-${d}`;
-    }
-    return raw;
-  }
 
   const [opponent,   setOpponent]   = React.useState(initialGame ? initialGame.opponent || "" : "");
   const [venue,      setVenue]      = React.useState(initialGame ? initialGame.venue    || "" : "");
@@ -317,7 +317,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
       {/* Scrollable content */}
       <main style={{
         flex: 1, overflowY: "auto",
-        padding: "1.25rem 1rem 5.5rem",
+        padding: "1.25rem 1rem 1.5rem",
         display: "flex", flexDirection: "column", gap: "1.5rem",
       }}>
 
@@ -387,9 +387,9 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
 
       </main>
 
-      {/* Fixed bottom CTA */}
+      {/* Bottom CTA */}
       <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 20,
+        flexShrink: 0, zIndex: 20,
         background: CHROME_BG_ED,
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         borderTop: GOLD_LINE_ED,
