@@ -175,20 +175,8 @@ function Schedule({ games, onOpen, onEdit, onNewGame, onSettings, onEditSquad })
           paddingTop: "1.25rem",
           display: "flex", flexDirection: "column", gap: "0.65rem",
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <SectionLabel>Kader</SectionLabel>
-            <button onClick={onEditSquad} title="Kader verwalten" style={{
-              appearance: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", gap: "0.3rem",
-              background: "none", border: "none", padding: "0.2rem 0",
-              fontSize: "0.6875rem", fontWeight: 600, color: "rgba(255,255,255,.3)",
-              letterSpacing: "0.04em", touchAction: "manipulation",
-            }}>
-              <Icon name="pencil" size={11} color="rgba(255,255,255,.3)" strokeWidth={2} />
-              Bearbeiten
-            </button>
-          </div>
-          <button onClick={() => onOpen(null)} style={{
+          <SectionLabel>Kader</SectionLabel>
+          <button onClick={onEditSquad} style={{
             appearance: "none", cursor: "pointer", textAlign: "left", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "space-between",
             background: "rgba(255,255,255,.025)",
@@ -213,7 +201,7 @@ function Schedule({ games, onOpen, onEdit, onNewGame, onSettings, onEditSquad })
                   Vollkader
                 </p>
                 <p style={{ margin: "0.1rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,.28)" }}>
-                  Alle Spieler — ohne Spielauswahl
+                  Spieler, Rollen &amp; Status verwalten
                 </p>
               </div>
             </div>

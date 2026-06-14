@@ -204,17 +204,7 @@ function App() {
   }
 
   async function openGame(g) {
-    if (!g) {
-      // "Quick track" with full squad, no saved roster
-      const squadRoles = {};
-      players.forEach((p) => { if (p.role) squadRoles[p.id] = p.role; });
-      setGame({ id: '', opponent: 'Vollkader', format: 2 });
-      setActiveGoalies(goalies);
-      setActivePlayers(players);
-      setInitialRoles(squadRoles);
-      setScreen('tracker');
-      return;
-    }
+    if (!g) return; // Vollkader now routes to squad editor, not tracker
 
     // Try to fetch the saved game roster
     let rGoalies = goalies;
@@ -372,8 +362,9 @@ function App() {
       goalies={goalies}
       players={players}
       scriptUrl={scriptUrl}
-      onBack={() => setSquadEdit(false) || setScreen('schedule')}
-      onSave={(updatedPlayers) => {
+      onBack={() => setScreen('schedule')}
+      onSave={(updatedGoalies, updatedPlayers) => {
+        setGoalies(updatedGoalies);
         setPlayers(updatedPlayers);
         setScreen('schedule');
       }}
