@@ -279,7 +279,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
     );
   }
 
-  const canStart = selGoalies.size + selPlayers.size > 0;
+  const canStart = isEdit || selGoalies.size + selPlayers.size > 0;
 
   return (
     <div style={{
