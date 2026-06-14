@@ -120,10 +120,21 @@ function _upsertRow(sheet, keyCol, keyVal, newRow) {
   return -1;
 }
 
+/** Insert display_name as column B if the Games sheet predates that column. */
+function _migrateGamesHeader(sheet) {
+  if (sheet.getLastRow() === 0) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('display_name')) {
+    sheet.insertColumnAfter(1);
+    sheet.getRange(1, 2).setValue('display_name');
+  }
+}
+
 /** Upsert the Games sheet and create a per-game QUERY sheet if new. */
 function _upsertGame(ss, p) {
   const sheet = _getOrCreate(ss, GAMES_SHEET);
   _ensureGamesHeader(sheet);
+  _migrateGamesHeader(sheet);
 
   const row = [
     p.game_id            || '',
