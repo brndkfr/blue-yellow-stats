@@ -17,15 +17,11 @@ function ScheduleHeader({ onNewGame, onSettings }) {
     }}>
       {/* Wordmark */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <span style={{
-          display: "grid", placeItems: "center",
-          width: "2rem", height: "2rem",
-          borderRadius: "var(--radius-md)",
-          background: "#0033a0",
-          flexShrink: 0,
-        }}>
-          <Icon name="activity" size={16} color="#fff" strokeWidth={2.5} />
-        </span>
+        <img
+          src="https://upload.wikimedia.org/wikipedia/commons/8/8f/Logo-kloten-dietlikon-jets.svg"
+          alt="Jets"
+          style={{ width: "2.25rem", height: "2.25rem", flexShrink: 0 }}
+        />
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem" }}>
           <span style={{ fontWeight: 900, fontSize: "1.0625rem", lineHeight: 1, color: "#fff", letterSpacing: "-0.01em" }}>Jets</span>
           <span style={{ color: "rgba(255,255,255,.38)", fontSize: "0.875rem", fontWeight: 500 }}>Tracker</span>
