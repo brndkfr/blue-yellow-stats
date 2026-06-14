@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v11';
+const VERSION           = 'v12';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -246,37 +246,44 @@ function doPost(e) {
   }
 }
 
+/** Write an event row using the actual header order, immune to migration drift. */
+function _appendEventRow(sheet, data) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = headers.map((h) => (h in data ? data[h] : ''));
+  sheet.appendRow(row);
+}
+
 function _handleEvent(ss, p) {
   const evSh = _getOrCreate(ss, EVENTS_SHEET);
   _ensureEventsHeader(evSh);
   _migrateEventsHeader(evSh);
   _migrateEventsHeaderV2(evSh);
 
-  evSh.appendRow([
-    p.game_id       || '',
-    p.game_date     || '',
-    p.game_start    || '',
-    p.opponent      || '',
-    p.type          || '',
-    p.venue         || '',
-    p.home          || '',
-    Number(p.period)     || 0,
-    p.timestamp     || '',
-    Number(p.player_id)  || '',
-    Number(p.player_nr)  || 0,
-    p.player_name   || '',
-    p.player_role   || '',
-    p.action        || '',
-    Number(p.assist_id)  || '',
-    Number(p.assist_nr)  || '',
-    p.assist_name   || '',
-    p.power_play    || '',
-    p.reason        || '',
-    p.scout         || '',
-    p.note          || '',
-    p.was_queued    || '',
-    new Date(),
-  ]);
+  _appendEventRow(evSh, {
+    game_id:     p.game_id       || '',
+    game_date:   p.game_date     || '',
+    game_start:  p.game_start    || '',
+    opponent:    p.opponent      || '',
+    type:        p.type          || '',
+    venue:       p.venue         || '',
+    home:        p.home          || '',
+    period:      Number(p.period)     || 0,
+    timestamp:   p.timestamp     || '',
+    player_id:   Number(p.player_id)  || '',
+    player_nr:   Number(p.player_nr)  || 0,
+    player_name: p.player_name   || '',
+    player_role: p.player_role   || '',
+    action:      p.action        || '',
+    assist_id:   Number(p.assist_id)  || '',
+    assist_nr:   Number(p.assist_nr)  || '',
+    assist_name: p.assist_name   || '',
+    power_play:  p.power_play    || '',
+    reason:      p.reason        || '',
+    scout:       p.scout         || '',
+    note:        p.note          || '',
+    was_queued:  p.was_queued    || '',
+    received_at: new Date(),
+  });
 
   _upsertGame(ss, p);
   return _json({ status: 'ok' });
