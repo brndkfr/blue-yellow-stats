@@ -218,6 +218,7 @@ function LTStrafeSheet({ onGegentor, onBoxPlay, onPowerPlay, onClose }) {
 }
 
 function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles = {} }) {
+  const scout = localStorage.getItem("jets_scout") || "";
   const [period,      setPeriod]      = React.useState(1);
   const [format,      setFormat]      = React.useState(game.format || 2);
   const [active,      setActive]      = React.useState(null);
@@ -424,8 +425,20 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 color: "#fff",
               }}>Jets · {game.opponent}</p>
-              <p style={{ margin: 0, fontSize: "0.6875rem", color: "rgba(255,255,255,.38)" }}>
+              <p style={{ margin: 0, fontSize: "0.6875rem", color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
                 {game.venue || "Vollkader"}
+                {scout && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: "0.2rem",
+                    background: "rgba(255,205,0,.1)", border: "1px solid rgba(255,205,0,.25)",
+                    borderRadius: "var(--radius-pill)",
+                    padding: "1px 6px", fontSize: "0.625rem", fontWeight: 700,
+                    color: "rgba(255,205,0,.75)", letterSpacing: "0.04em",
+                  }}>
+                    <Icon name="user" size={9} color="rgba(255,205,0,.6)" strokeWidth={2.5} />
+                    {scout}
+                  </span>
+                )}
               </p>
             </div>
           </div>
