@@ -20,6 +20,8 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
+const VERSION           = 'v7';
+
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
 const SQUAD_SHEET       = 'Squad';
