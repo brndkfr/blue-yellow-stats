@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v10';
+const VERSION           = 'v11';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -208,7 +208,7 @@ function _upsertGame(ss, p) {
     p.format             || '',
     p.minutes_per_period || '',
     p.team               || '',
-    '',  // result — filled manually after the game
+    p.result             || '',
   ];
 
   const isNew = _upsertRow(sheet, 'game_id', p.game_id, row) === -1;
@@ -225,7 +225,7 @@ function _createGameQuerySheet(ss, gameId, displayName) {
   const qs = ss.insertSheet(sheetName);
   // QUERY pulls all Events rows where column A (game_id) matches
   qs.getRange('A1').setFormula(
-    `=QUERY(${EVENTS_SHEET}!A:V,"SELECT * WHERE A='${gameId}'",1)`
+    `=QUERY(${EVENTS_SHEET}!A:W,"SELECT * WHERE A='${gameId}'",1)`
   );
 }
 
