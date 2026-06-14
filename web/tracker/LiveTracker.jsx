@@ -321,33 +321,35 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   function sendAction(a) {
     postEvent({
       player_id:   String(active.id  || ""),
-      player_nr:   String(active.nr),
+      player_nr:   active.nr ? String(active.nr) : "",
       player_name: active.name,
       action:      a.code,
     });
-    const t = { icon: "check", tone: "info", text: `${a.label} — #${active.nr} ${active.name}` };
+    const t = { icon: "check", tone: "info", text: `${a.label} — ${active.nr ? "#" + active.nr + " " : ""}${active.name}` };
     setLastEvent(t); fireToast(t); setActive(null);
   }
   function startGoal() { setAssistFor(active); setActive(null); }
   function pickAssist(p) {
     if (p.id === assistFor.id) return;
+    const scorer = assistFor.nr ? `#${assistFor.nr} ${assistFor.name}` : assistFor.name;
     finishGoal(
-      `Goal #${assistFor.nr} ${assistFor.name} · Assist ${p.name}${powerPlay ? " · PP" : ""}`,
+      `Goal ${scorer} · Assist ${p.name}${powerPlay ? " · PP" : ""}`,
       p,
     );
   }
   function skipAssist() {
-    finishGoal(`Goal #${assistFor.nr} ${assistFor.name}${powerPlay ? " · PP" : ""}`, null);
+    const scorer = assistFor.nr ? `#${assistFor.nr} ${assistFor.name}` : assistFor.name;
+    finishGoal(`Goal ${scorer}${powerPlay ? " · PP" : ""}`, null);
   }
   function finishGoal(text, assistPlayer) {
     postEvent({
       player_id:   String(assistFor.id  || ""),
-      player_nr:   String(assistFor.nr),
+      player_nr:   assistFor.nr ? String(assistFor.nr) : "",
       player_name: assistFor.name,
       action:      "goal",
       assist_id:   assistPlayer ? String(assistPlayer.id  || "") : "",
-      assist_nr:   assistPlayer ? String(assistPlayer.nr) : "",
-      assist_name: assistPlayer ? assistPlayer.name        : "",
+      assist_nr:   assistPlayer && assistPlayer.nr ? String(assistPlayer.nr) : "",
+      assist_name: assistPlayer ? assistPlayer.name : "",
       power_play:  powerPlay ? "yes" : "",
     });
     setScore((s) => ({ ...s, us: s.us + 1 }));
