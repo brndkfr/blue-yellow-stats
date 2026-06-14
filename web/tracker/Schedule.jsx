@@ -4,6 +4,7 @@
 
 const SCHED_CHROME_BG  = "rgba(1,9,35,.95)";
 const SCHED_GOLD_LINE  = "1px solid rgba(255,205,0,.2)";
+const VERSION          = "v7";
 
 function ScheduleHeader({ onNewGame }) {
   return (
@@ -29,6 +30,14 @@ function ScheduleHeader({ onNewGame }) {
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem" }}>
           <span style={{ fontWeight: 900, fontSize: "1.0625rem", lineHeight: 1, color: "#fff", letterSpacing: "-0.01em" }}>Jets</span>
           <span style={{ color: "rgba(255,255,255,.38)", fontSize: "0.875rem", fontWeight: 500 }}>Tracker</span>
+          <span style={{
+            fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.04em",
+            color: "rgba(255,205,0,.55)",
+            background: "rgba(255,205,0,.08)",
+            border: "1px solid rgba(255,205,0,.2)",
+            borderRadius: "var(--radius-sm)",
+            padding: "1px 5px", lineHeight: 1.6,
+          }}>{VERSION}</span>
         </div>
       </div>
 
