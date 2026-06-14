@@ -11,37 +11,76 @@ Two tools in one repo:
 
 ## Live Tracker
 
-Open on any phone during a game:
+Mobile web app for scouting floorball games. Open on any phone:
 `https://brndkfr.github.io/blue-yellow-stats/web/tracker/`
 
-Select a player, tap an action. Events are sent to Google Sheets in real time.
-Works offline: if there is no network, events are queued locally and sent automatically when connectivity returns.
+React 18 (CDN, no build step) + Google Apps Script backend. All data lives in a Google Sheet.
 
-### Adding a new game
+### How it works
 
-1. Create `web/tracker/kader_YYYY-MM-DD_HHMM_OPP.json` (copy an existing file, update `game_info` and the roster)
-2. Add an entry to `web/tracker/games.json`
+- **Schedule screen** - lists upcoming, today's, and past games loaded from the Games sheet
+- **Roster editor** - before a game, select which players are active and set per-game roles
+- **Live tracker** - tap a player, tap an action; events are sent to Google Sheets instantly
+- **Squad manager** - manage default roles, activate/deactivate players, add new players (Vollkader button)
+
+Works offline: if there is no network, events are queued in localStorage and flushed automatically when connectivity returns (queue badge shown in the header).
 
 ### Actions tracked
 
-| Icon | Code | Label |
-|------|------|-------|
-| 🔄 | `recovery`  | Ballgewinn |
-| 🛡️ | `stop`      | Abwehr |
-| 🔑 | `key_pass`  | Schluesselpass |
-| 🎯 | `slot_shot` | Torschuss |
-| 🧤 | `slot_save` | Topparade |
-| ⚠️ | `turnover`  | Ballverlust |
-| ⚽ | `goal`      | Tor (with optional assist) |
+**Field players**
 
-### Google Sheets setup
+| Code | Label |
+|------|-------|
+| `recovery` | Ballgewinn |
+| `defense` | Abwehr |
+| `key_pass` | Schlüsselpass |
+| `slot_shot` | Torschuss |
+| `bad_pass` | Fehlpass |
+| `goal` | Tor (with optional assist + power-play flag) |
 
-The backend script is `web/tracker/code.gs`. Events are written to two sheets:
+**Goalies**
 
-- **Events** -- one row per tap (17 columns including `action`, `assist`, `scout`, `was_queued`)
-- **Games** -- one row per game, auto-created on the first event
+| Code | Label |
+|------|-------|
+| `save` | Parade |
+| `mega_save` | Mega Parade |
+| `key_pass` | Schlüsselpass |
+| `bad_throw` | Fehlauswurf |
 
-To update the script: paste `code.gs` into Apps Script, then edit the **existing deployment** (not "New deployment") so the URL stays the same.
+**Team events**
+
+| Code | Label |
+|------|-------|
+| `gegengoal` | Gegentor (with optional reason) |
+| `box_killed` / `box_conceded` | BoxPlay resolved |
+| `pp_scored` / `pp_expired` | Powerplay resolved |
+
+Every event also records: game, period (half/third), ISO timestamp, player id/nr/name/role, assist, scout, and whether it was queued offline.
+
+### Google Sheets setup (first time)
+
+1. Create a Google Sheet (e.g. "Jets Tracker 2026/27")
+2. Extensions -> Apps Script -> delete the default code -> paste `web/tracker/code.gs`
+3. Run `setup()` once (Run menu) - creates all sheets and seeds Squad + Scouts with the Jets U14B Blau roster
+4. Deploy as Web App: Execute as Me, Who has access: Anyone
+5. Paste the deployment URL into `web/tracker/config.js` -> `scriptUrl`
+
+### Sheets managed by the backend
+
+| Sheet | Description |
+|-------|-------------|
+| `Events` | One row per tracked action (23 columns) |
+| `Games` | One row per game, upserted by game_id |
+| `Squad` | Full player/goalie pool with roles and active status |
+| `GameRoster` | Per-game player selection and role overrides |
+| `Scouts` | List of scouts shown in the scout bar |
+| `{date} {opponent}` | Auto-created QUERY sheet per game, filters Events |
+
+### Updating the script
+
+Paste the new `code.gs` into Apps Script, then update the **existing deployment** (Deploy -> Manage deployments -> edit -> New version). Do not create a new deployment - the URL must stay the same.
+
+The script runs schema migrations automatically on first use after an update - no manual sheet edits needed.
 
 ---
 
