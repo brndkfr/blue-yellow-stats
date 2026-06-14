@@ -167,6 +167,8 @@ function App() {
   const [activeGoalies, setActiveGoalies]= React.useState([]);
   const [activePlayers, setActivePlayers]= React.useState([]);
   const [initialRoles,  setInitialRoles] = React.useState({});
+  const [editingGame,   setEditingGame]  = React.useState(null);
+  const [editRoster,    setEditRoster]   = React.useState(null);
 
   // Load squad + games from Sheets whenever scriptUrl is set
   React.useEffect(() => {
@@ -246,6 +248,18 @@ function App() {
     setScreen('tracker');
   }
 
+  async function handleEditGame(g) {
+    let rosterRows = [];
+    if (scriptUrl && g.id) {
+      try {
+        rosterRows = await fetch(`${scriptUrl}?action=gameRoster&game_id=${encodeURIComponent(g.id)}`).then((r) => r.json());
+      } catch (_) {}
+    }
+    setEditingGame(g);
+    setEditRoster(rosterRows);
+    setScreen('editor');
+  }
+
   function saveFromEditor(g, gList, pList, roles) {
     const rawDate = g._rawDate || new Date().toISOString().split('T')[0];
     const [yr, mo, dy] = rawDate.split('-').map(Number);
@@ -253,7 +267,14 @@ function App() {
     const todayD    = new Date(); todayD.setHours(0, 0, 0, 0);
     const tomorrowD = new Date(todayD); tomorrowD.setDate(todayD.getDate() + 1);
     const group = gameDate < todayD ? 'past' : gameDate < tomorrowD ? 'today' : 'upcoming';
-    setGames((prev) => [...prev, { ...g, group, _goalies: gList, _players: pList, _roles: roles }]);
+    const updated = { ...g, group, _goalies: gList, _players: pList, _roles: roles };
+    setGames((prev) => {
+      const idx = prev.findIndex((x) => x.id === g.id);
+      if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+      return [...prev, updated];
+    });
+    setEditingGame(null);
+    setEditRoster(null);
     setScreen('schedule');
   }
 
@@ -300,8 +321,10 @@ function App() {
       goalies={goalies}
       players={players}
       scriptUrl={scriptUrl}
+      initialGame={editingGame}
+      initialRoster={editRoster}
       onSave={saveFromEditor}
-      onBack={() => setScreen('schedule')}
+      onBack={() => { setEditingGame(null); setEditRoster(null); setScreen('schedule'); }}
     />;
   }
   if (screen === 'tracker') {
@@ -317,7 +340,8 @@ function App() {
   return <Schedule
     games={games}
     onOpen={openGame}
-    onNewGame={() => setScreen('editor')}
+    onEdit={handleEditGame}
+    onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
   />;
 }
 

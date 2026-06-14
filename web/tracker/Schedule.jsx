@@ -64,7 +64,31 @@ function ScheduleHeader({ onNewGame }) {
   );
 }
 
-function Schedule({ games, onOpen, onNewGame }) {
+function GameCardRow({ game, emphasis, onOpen, onEdit }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <GameCard {...game} emphasis={emphasis} onClick={() => onOpen(game)} />
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(game); }}
+        aria-label="Spiel bearbeiten"
+        style={{
+          position: "absolute", top: "50%", right: "2.75rem",
+          transform: "translateY(-50%)",
+          appearance: "none", cursor: "pointer",
+          width: "2rem", height: "2rem",
+          borderRadius: "var(--radius-md)",
+          background: "rgba(255,255,255,.08)",
+          border: "1px solid rgba(255,255,255,.12)",
+          display: "grid", placeItems: "center",
+          touchAction: "manipulation",
+        }}>
+        <Icon name="pencil" size={13} color="rgba(255,255,255,.55)" strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+function Schedule({ games, onOpen, onEdit, onNewGame }) {
   const today    = games.filter((g) => g.group === "today");
   const upcoming = games.filter((g) => g.group === "upcoming");
   const past     = games.filter((g) => g.group === "past");
@@ -89,8 +113,8 @@ function Schedule({ games, onOpen, onNewGame }) {
             <SectionLabel>Heute</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--tile-gap)" }}>
               {today.map((g, i) => (
-                <GameCard key={g.id || `today-${i}`} {...g}
-                  emphasis="today" onClick={() => onOpen(g)} />
+                <GameCardRow key={g.id || `today-${i}`} game={g}
+                  emphasis="today" onOpen={onOpen} onEdit={onEdit} />
               ))}
             </div>
           </section>
@@ -102,8 +126,8 @@ function Schedule({ games, onOpen, onNewGame }) {
             <SectionLabel>Nächste Spiele</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--tile-gap)" }}>
               {upcoming.map((g, i) => (
-                <GameCard key={g.id || `upcoming-${i}`} {...g}
-                  emphasis="upcoming" onClick={() => onOpen(g)} />
+                <GameCardRow key={g.id || `upcoming-${i}`} game={g}
+                  emphasis="upcoming" onOpen={onOpen} onEdit={onEdit} />
               ))}
             </div>
           </section>
@@ -115,8 +139,8 @@ function Schedule({ games, onOpen, onNewGame }) {
             <SectionLabel>Vergangene Spiele</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--tile-gap)" }}>
               {past.map((g, i) => (
-                <GameCard key={g.id || `past-${i}`} {...g}
-                  emphasis="past" onClick={() => onOpen(g)} />
+                <GameCardRow key={g.id || `past-${i}`} game={g}
+                  emphasis="past" onOpen={onOpen} onEdit={onEdit} />
               ))}
             </div>
           </section>

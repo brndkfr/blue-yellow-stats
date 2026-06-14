@@ -144,19 +144,56 @@ function CountBadge({ selected, total }) {
 }
 
 /* ── RosterEditor ── */
-function RosterEditor({ goalies, players, scriptUrl, onSave, onBack }) {
-  const [opponent,   setOpponent]   = React.useState("");
-  const [venue,      setVenue]      = React.useState("");
-  const [format,     setFormat]     = React.useState(2);
-  const [date,       setDate]       = React.useState("");
-  const [time,       setTime]       = React.useState("");
-  // Use player id (stable) as the key for selection sets
-  const [selGoalies, setSelGoalies] = React.useState(() => new Set(goalies.map((g) => g.id)));
-  const [selPlayers, setSelPlayers] = React.useState(() => new Set(players.map((p) => p.id)));
-  // Default roles come from the Squad sheet; fall back to "center"
-  const [roles,      setRoles]      = React.useState(() => {
+function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster, onSave, onBack }) {
+  const isEdit = Boolean(initialGame && initialGame.id);
+
+  // Parse initialGame date from DD.MM.YYYY or YYYY-MM-DD to YYYY-MM-DD for <input type=date>
+  function _toIso(raw) {
+    if (!raw) return "";
+    if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
+      const [d, m, y] = raw.split(".");
+      return `${y}-${m}-${d}`;
+    }
+    return raw;
+  }
+
+  const [opponent,   setOpponent]   = React.useState(initialGame ? initialGame.opponent || "" : "");
+  const [venue,      setVenue]      = React.useState(initialGame ? initialGame.venue    || "" : "");
+  const [format,     setFormat]     = React.useState(initialGame ? (Number(initialGame.format) || 2) : 2);
+  const [date,       setDate]       = React.useState(initialGame ? _toIso(initialGame.date) : "");
+  const [time,       setTime]       = React.useState(initialGame ? initialGame.time || "" : "");
+
+  // Build selected sets from initialRoster if editing; otherwise select all
+  const [selGoalies, setSelGoalies] = React.useState(() => {
+    if (initialRoster && initialRoster.length > 0) {
+      const selIds = new Set(
+        initialRoster.filter((r) => String(r.selected).toLowerCase() !== "no")
+                     .map((r) => Number(r.player_id))
+      );
+      return new Set(goalies.filter((g) => selIds.has(g.id)).map((g) => g.id));
+    }
+    return new Set(goalies.map((g) => g.id));
+  });
+  const [selPlayers, setSelPlayers] = React.useState(() => {
+    if (initialRoster && initialRoster.length > 0) {
+      const selIds = new Set(
+        initialRoster.filter((r) => String(r.selected).toLowerCase() !== "no")
+                     .map((r) => Number(r.player_id))
+      );
+      return new Set(players.filter((p) => selIds.has(p.id)).map((p) => p.id));
+    }
+    return new Set(players.map((p) => p.id));
+  });
+
+  // Build roles from initialRoster overrides, fall back to squad defaults
+  const [roles, setRoles] = React.useState(() => {
     const r = {};
     players.forEach((p) => { r[p.id] = p.role || "center"; });
+    if (initialRoster) {
+      initialRoster.forEach((row) => {
+        if (row.role) r[Number(row.player_id)] = row.role;
+      });
+    }
     return r;
   });
   const [saving, setSaving] = React.useState(false);
@@ -183,7 +220,8 @@ function RosterEditor({ goalies, players, scriptUrl, onSave, onBack }) {
     const timeStr     = time || "";
     const oppStr      = opponent.trim() || "Gegner";
     const timePart    = timeStr.replace(":", "");
-    const gameId      = `${rawDate.replace(/-/g, "")}_${timePart}`;
+    // Reuse existing game_id when editing so the Query sheet and all events stay linked
+    const gameId      = isEdit ? initialGame.id : `${rawDate.replace(/-/g, "")}_${timePart}`;
     const displayName = `${rawDate} ${timeStr} ${oppStr}`.trim();
 
     const selectedGoalies = goalies.filter((g) => selGoalies.has(g.id));
@@ -268,7 +306,9 @@ function RosterEditor({ goalies, players, scriptUrl, onSave, onBack }) {
           <Icon name="chevron-left" size={17} strokeWidth={2} color="rgba(255,255,255,.65)" />
         </button>
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem" }}>
-          <span style={{ fontWeight: 900, fontSize: "1.0625rem", color: "#fff" }}>Neues Spiel</span>
+          <span style={{ fontWeight: 900, fontSize: "1.0625rem", color: "#fff" }}>
+            {isEdit ? "Spiel bearbeiten" : "Neues Spiel"}
+          </span>
         </div>
       </header>
 

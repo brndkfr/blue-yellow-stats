@@ -101,14 +101,14 @@ function SectionLabel({ children, count, style, ...rest }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", ...style }} {...rest}>
       <p style={{
-        margin: 0, fontFamily: "var(--font-sans)", fontWeight: 600,
+        margin: 0, fontFamily: "var(--font-sans)", fontWeight: 700,
         fontSize: "0.6875rem", lineHeight: 1,
         textTransform: "uppercase", letterSpacing: "0.16em",
-        color: "rgba(255,255,255,.35)",
+        color: "rgba(255,255,255,.55)",
       }}>{children}</p>
       {count != null && (
         <span style={{
-          fontSize: "0.6875rem", color: "rgba(255,255,255,.22)",
+          fontSize: "0.6875rem", color: "rgba(255,255,255,.38)",
           fontWeight: 600, letterSpacing: "0.05em",
         }}>{count}</span>
       )}
@@ -128,9 +128,9 @@ function RosterTile({ nr, name, role = "player", playerRole, state = "default", 
   }[role] || "var(--blue-400)";
 
   const variants = {
-    default:     { bg: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.07)", ring: "none",                        opacity: 1,    cursor: "pointer" },
-    selected:    { bg: "rgba(0,44,140,.3)",     border: "1px solid transparent",           ring: "0 0 0 2.5px #ffcd00",          opacity: 1,    cursor: "pointer" },
-    assistTarget:{ bg: "rgba(0,44,140,.15)",    border: "1px solid transparent",           ring: "0 0 0 2px rgba(0,51,160,.65)", opacity: 1,    cursor: "pointer" },
+    default:     { bg: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.12)", ring: "none",                        opacity: 1,    cursor: "pointer" },
+    selected:    { bg: "rgba(0,44,140,.4)",     border: "1px solid rgba(0,51,160,.6)",     ring: "0 0 0 2.5px #ffcd00",          opacity: 1,    cursor: "pointer" },
+    assistTarget:{ bg: "rgba(0,44,140,.25)",    border: "1px solid rgba(0,51,160,.5)",     ring: "0 0 0 2px rgba(0,51,160,.65)", opacity: 1,    cursor: "pointer" },
     disabled:    { bg: "rgba(100,30,10,.28)",   border: "1px solid transparent",           ring: "0 0 0 2px rgba(180,50,20,.4)", opacity: 0.5,  cursor: "not-allowed" },
   }[state] || {};
 
@@ -175,8 +175,8 @@ function RosterTile({ nr, name, role = "player", playerRole, state = "default", 
         {nr}
       </span>
       <span style={{
-        fontSize: "0.875rem", fontWeight: 500, lineHeight: 1.2,
-        color: role === "reserve" ? "rgba(255,255,255,.3)" : "rgba(255,255,255,.8)",
+        fontSize: "0.875rem", fontWeight: 600, lineHeight: 1.2,
+        color: role === "reserve" ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.92)",
         textAlign: "center", padding: "0 0.2rem",
       }}>{name}</span>
     </button>
@@ -223,7 +223,7 @@ function ActionTile({ icon, label, tint = "neutral", span = 1, onClick, style, .
       </span>
       <span style={{
         fontSize: "0.8125rem", fontWeight: 600, lineHeight: 1.2,
-        textAlign: "center", color: "rgba(255,255,255,.75)",
+        textAlign: "center", color: "rgba(255,255,255,.90)",
       }}>{label}</span>
     </button>
   );
@@ -235,38 +235,38 @@ function GameCard({ opponent, venue, date, time, home = true, type = "regular",
   const typeLabel = { regular: "Meisterschaft", cup: "Cup", test: "Testspiel", demo: "Demo" }[type] || type;
   const past = emphasis === "past";
   const bg = emphasis === "today"
-    ? "rgba(0,44,140,.13)"
+    ? "rgba(0,44,140,.2)"
     : emphasis === "upcoming"
-    ? "rgba(255,255,255,.03)"
-    : "rgba(255,255,255,.015)";
+    ? "rgba(255,255,255,.06)"
+    : "rgba(255,255,255,.03)";
   return (
     <button onClick={onClick} style={{
       appearance: "none", textAlign: "left", cursor: "pointer", width: "100%",
       display: "flex", alignItems: "center", justifyContent: "space-between",
       gap: "0.5rem", background: bg,
-      border: "1px solid rgba(255,255,255,.07)",
+      border: `1px solid ${emphasis === "today" ? "rgba(0,51,160,.45)" : "rgba(255,255,255,.1)"}`,
       borderLeft: emphasis === "today" ? "3px solid #0033a0" : "3px solid transparent",
       borderRadius: "var(--radius-xl)",
-      padding: "0.85rem 1rem", opacity: past ? 0.45 : 1,
+      padding: "0.85rem 1rem", opacity: past ? 0.55 : 1,
       fontFamily: "var(--font-sans)",
       touchAction: "manipulation",
       ...style,
     }} {...rest}>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
-          {date && <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,.4)" }}>{date}</span>}
-          {time && <span style={{ fontSize: "0.75rem", fontWeight: 700, color: past ? "rgba(255,255,255,.3)" : "#ffcd00" }}>{time}</span>}
+          {date && <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,.6)" }}>{date}</span>}
+          {time && <span style={{ fontSize: "0.75rem", fontWeight: 700, color: past ? "rgba(255,255,255,.5)" : "#ffcd00" }}>{time}</span>}
           {!past && <Badge tone={home ? "home" : "away"}>{home ? "Heim" : "Auswärts"}</Badge>}
           {!past && <Badge tone={type}>{typeLabel}</Badge>}
           {live && <Badge tone="live">Live</Badge>}
         </div>
         <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem", lineHeight: 1.2,
-          color: past ? "rgba(255,255,255,.4)" : "#fff" }}>{opponent}</p>
+          color: past ? "rgba(255,255,255,.55)" : "#fff" }}>{opponent}</p>
         {venue && <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem",
-          color: past ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.38)",
+          color: past ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.55)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{venue}</p>}
       </div>
-      <Icon name="chevron-right" size={18} color={past ? "rgba(255,255,255,.18)" : "rgba(255,255,255,.35)"} />
+      <Icon name="chevron-right" size={18} color={past ? "rgba(255,255,255,.3)" : "rgba(255,255,255,.5)"} />
     </button>
   );
 }

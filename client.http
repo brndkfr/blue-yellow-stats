@@ -60,6 +60,10 @@ GET https://api-v2.swissunihockey.ch/api/games/1096880
 GET https://api-v2.swissunihockey.ch/api/games/1093736
 
 ### get game details by game_id with lineups - KD Jets U14B,
+GET https://api-v2.swissunihockey.ch/api/games/1087220
+
+
+### get game details by game_id with lineups - KD Jets U14B,
 GET https://api-v2.swissunihockey.ch/api/games/1093736/summary
 
 ### GET game_events by game_id 
@@ -70,6 +74,10 @@ GET https://api-v2.swissunihockey.ch/api/games/1096880/summary
 
 ### GET game_events by game_id 
 GET https://api-v2.swissunihockey.ch/api/game_events/1096880
+
+
+
+
 
 
 ###
