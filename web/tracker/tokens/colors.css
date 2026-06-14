@@ -1,0 +1,39 @@
+/* Jets Tracker — Color tokens
+   Brand: #0033a0 navy (Pantone 286C) · #ffcd00 gold (Pantone 116C)
+   Readability: all text targets WCAG AA (4.5:1) on bg-app */
+:root {
+  /* App surface */
+  --bg-app:       #0d1321;   /* slightly lighter than pure navy-black */
+  --bg-card:      #151e30;   /* elevated card surface */
+  --bg-card-hi:   #1c2640;   /* hover / selected card */
+
+  /* Brand */
+  --navy:         #0033a0;
+  --navy-dim:     #002680;
+  --gold:         #ffcd00;
+  --gold-dim:     #e6ba00;
+
+  /* Text — higher opacity than before for better contrast */
+  --text-primary:   rgba(255,255,255,.95);  /* headings, player names */
+  --text-secondary: rgba(255,255,255,.65);  /* labels, venue, subtitles */
+  --text-tertiary:  rgba(255,255,255,.40);  /* hints, counts, timestamps */
+  --text-disabled:  rgba(255,255,255,.22);
+
+  /* Blue scale */
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;   /* player jersey numbers */
+  --blue-500: #3b82f6;
+
+  /* Gray scale */
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+
+  /* Accent */
+  --purple-600: #7c3aed;
+
+  /* Semantic */
+  --success:  #22c55e;
+  --danger:   #ef4444;
+  --warning:  #f59e0b;
+}

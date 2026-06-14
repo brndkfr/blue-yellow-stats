@@ -1,0 +1,9 @@
+/* Jets Tracker — Border radius tokens */
+:root {
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  22px;
+  --radius-pill: 9999px;
+}

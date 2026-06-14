@@ -1,0 +1,5 @@
+/* Jets Tracker — Spacing tokens */
+:root {
+  --tile-gap:    0.5rem;
+  --section-gap: 1.75rem;
+}
