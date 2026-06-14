@@ -231,7 +231,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   const [boxPlay,     setBoxPlay]     = React.useState(null); // null | { mode:"box"|"power", seconds:120 }
   const [playerRoles, setPlayerRoles] = React.useState(() => {
     const r = {};
-    players.forEach((p) => { r[p.nr] = (initialRoles && initialRoles[p.id]) || p.role || "center"; });
+    players.forEach((p) => { r[p.id] = (initialRoles && initialRoles[p.id]) || p.role || "center"; });
     return r;
   });
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
@@ -281,9 +281,9 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
     return () => clearTimeout(t);
   }, [boxPlay]);
 
-  const isGoalie    = (p) => goalies.some((g) => g.nr === p?.nr);
-  const getRole     = (p) => playerRoles[p?.nr] || "center";
-  const setRole     = (nr, role) => setPlayerRoles((prev) => ({ ...prev, [nr]: role }));
+  const isGoalie    = (p) => goalies.some((g) => g.id === p?.id);
+  const getRole     = (p) => playerRoles[p?.id] || "center";
+  const setRole     = (id, role) => setPlayerRoles((prev) => ({ ...prev, [id]: role }));
   const toggleFormat = () => { setPeriod(1); setFormat((f) => f === 2 ? 3 : 2); };
 
   function fireToast(t) {
@@ -330,7 +330,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   }
   function startGoal() { setAssistFor(active); setActive(null); }
   function pickAssist(p) {
-    if (p.nr === assistFor.nr) return;
+    if (p.id === assistFor.id) return;
     finishGoal(
       `Goal #${assistFor.nr} ${assistFor.name} · Assist ${p.name}${powerPlay ? " · PP" : ""}`,
       p,
@@ -388,12 +388,12 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   }
 
   function tileState(p) {
-    if (assistFor) return assistFor.nr === p.nr ? "disabled" : "assistTarget";
-    return active?.nr === p.nr ? "selected" : "default";
+    if (assistFor) return assistFor.id === p.id ? "disabled" : "assistTarget";
+    return active?.id === p.id ? "selected" : "default";
   }
   function onTile(p) {
     if (assistFor) { pickAssist(p); return; }
-    setActive(active?.nr === p.nr ? null : p);
+    setActive(active?.id === p.id ? null : p);
   }
 
   return (
@@ -477,7 +477,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
           <SectionLabel count={goalies.length}>Goalie</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "var(--tile-gap)" }}>
             {goalies.map((g) => (
-              <RosterTile key={g.nr} nr={g.nr} name={g.name} role="goalie"
+              <RosterTile key={g.id} nr={g.nr} name={g.name} role="goalie"
                 state={tileState(g)} onClick={() => onTile(g)} />
             ))}
           </div>
@@ -487,8 +487,8 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
           <SectionLabel count={players.length}>Feldspieler</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "var(--tile-gap)" }}>
             {players.map((p) => (
-              <RosterTile key={p.nr} nr={p.nr} name={p.name} role="player"
-                playerRole={playerRoles[p.nr] || "center"}
+              <RosterTile key={p.id} nr={p.nr} name={p.name} role="player"
+                playerRole={playerRoles[p.id] || "center"}
                 state={tileState(p)} onClick={() => onTile(p)} />
             ))}
           </div>
@@ -623,7 +623,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
                   const on = getRole(active) === r.id;
                   return (
                     <button key={r.id}
-                      onClick={(e) => { e.stopPropagation(); setRole(active.nr, r.id); }}
+                      onClick={(e) => { e.stopPropagation(); setRole(active.id, r.id); }}
                       style={{
                         flex: 1, appearance: "none", cursor: "pointer",
                         padding: "0.45rem 0.25rem",
