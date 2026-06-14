@@ -50,17 +50,19 @@ function EditorTile({ nr, name, role = "player", selected, playerRole, onToggle,
         </button>
       )}
 
+      {nr ? (
+        <span style={{
+          display: "flex", alignItems: "baseline", gap: "1px",
+          fontWeight: 900,
+          fontSize: role === "goalie" ? "1.5rem" : "1.25rem",
+          lineHeight: 1, color: numColor, fontVariantNumeric: "tabular-nums",
+        }}>
+          <span style={{ fontSize: "0.55em", opacity: 0.5, fontWeight: 700 }}>#</span>
+          {nr}
+        </span>
+      ) : null}
       <span style={{
-        display: "flex", alignItems: "baseline", gap: "1px",
-        fontWeight: 900,
-        fontSize: role === "goalie" ? "1.5rem" : "1.25rem",
-        lineHeight: 1, color: numColor, fontVariantNumeric: "tabular-nums",
-      }}>
-        <span style={{ fontSize: "0.55em", opacity: 0.5, fontWeight: 700 }}>#</span>
-        {nr}
-      </span>
-      <span style={{
-        fontSize: "0.875rem", fontWeight: 500, lineHeight: 1.2,
+        fontSize: nr ? "0.875rem" : "1rem", fontWeight: nr ? 500 : 700, lineHeight: 1.2,
         color: selected ? "rgba(255,255,255,.8)" : "rgba(255,255,255,.3)",
         textAlign: "center", padding: "0 0.2rem",
       }}>{name}</span>

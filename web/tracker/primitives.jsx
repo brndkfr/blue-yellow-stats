@@ -165,17 +165,19 @@ function RosterTile({ nr, name, role = "player", playerRole, state = "default", 
         </span>
       )}
 
+      {nr ? (
+        <span style={{
+          display: "flex", alignItems: "baseline", gap: "1px",
+          fontWeight: 900,
+          fontSize: role === "goalie" ? "1.5rem" : "1.25rem",
+          lineHeight: 1, color: numColor, fontVariantNumeric: "tabular-nums",
+        }}>
+          <span style={{ fontSize: "0.55em", opacity: 0.5, fontWeight: 700 }}>#</span>
+          {nr}
+        </span>
+      ) : null}
       <span style={{
-        display: "flex", alignItems: "baseline", gap: "1px",
-        fontWeight: 900,
-        fontSize: role === "goalie" ? "1.5rem" : "1.25rem",
-        lineHeight: 1, color: numColor, fontVariantNumeric: "tabular-nums",
-      }}>
-        <span style={{ fontSize: "0.55em", opacity: 0.5, fontWeight: 700 }}>#</span>
-        {nr}
-      </span>
-      <span style={{
-        fontSize: "0.875rem", fontWeight: 600, lineHeight: 1.2,
+        fontSize: nr ? "0.875rem" : "1rem", fontWeight: nr ? 600 : 700, lineHeight: 1.2,
         color: role === "reserve" ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.92)",
         textAlign: "center", padding: "0 0.2rem",
       }}>{name}</span>
