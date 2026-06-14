@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v8';
+const VERSION           = 'v9';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -160,11 +160,28 @@ function _migrateGamesHeader(sheet) {
   }
 }
 
+/** Insert format, minutes_per_period, team between home and result if missing. */
+function _migrateGamesHeaderV2(sheet) {
+  if (sheet.getLastRow() === 0) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('format')) {
+    const homeIdx = headers.indexOf('home');
+    if (homeIdx !== -1) {
+      const newCols = ['format', 'minutes_per_period', 'team'];
+      newCols.forEach((col, i) => {
+        sheet.insertColumnAfter(homeIdx + 1 + i);
+        sheet.getRange(1, homeIdx + 2 + i).setValue(col);
+      });
+    }
+  }
+}
+
 /** Upsert the Games sheet and create a per-game QUERY sheet if new. */
 function _upsertGame(ss, p) {
   const sheet = _getOrCreate(ss, GAMES_SHEET);
   _ensureGamesHeader(sheet);
   _migrateGamesHeader(sheet);
+  _migrateGamesHeaderV2(sheet);
 
   const row = [
     p.game_id            || '',
