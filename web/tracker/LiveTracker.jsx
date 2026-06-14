@@ -217,7 +217,7 @@ function LTStrafeSheet({ onGegentor, onBoxPlay, onPowerPlay, onClose }) {
   );
 }
 
-function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles = {} }) {
+function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, initialRoles = {} }) {
   const scout = localStorage.getItem("jets_scout") || "";
   const [period,      setPeriod]      = React.useState(1);
   const [format,      setFormat]      = React.useState(game.format || 2);
@@ -237,6 +237,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
   });
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
   const [confirmLeave, setConfirmLeave] = React.useState(false);
+  const [endGame,      setEndGame]      = React.useState(false);
 
   // Hide the external scout bar while tracking — scout is shown in the header pill
   React.useEffect(() => {
@@ -332,6 +333,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
       player_id:   String(active.id  || ""),
       player_nr:   active.nr ? String(active.nr) : "",
       player_name: active.name,
+      player_role: isGoalie(active) ? "goalie" : getRole(active),
       action:      a.code,
     });
     const t = { icon: "check", tone: "info", text: `${a.label} — ${active.nr ? "#" + active.nr + " " : ""}${active.name}` };
@@ -355,6 +357,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
       player_id:   String(assistFor.id  || ""),
       player_nr:   assistFor.nr ? String(assistFor.nr) : "",
       player_name: assistFor.name,
+      player_role: isGoalie(assistFor) ? "goalie" : getRole(assistFor),
       action:      "goal",
       assist_id:   assistPlayer ? String(assistPlayer.id  || "") : "",
       assist_nr:   assistPlayer && assistPlayer.nr ? String(assistPlayer.nr) : "",
@@ -618,6 +621,21 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
             Powerplay
           </button>
         </div>
+        {game.id && (
+          <button onClick={() => setEndGame(true)} style={{
+            appearance: "none", cursor: "pointer", width: "100%",
+            minHeight: "2.25rem", borderRadius: "var(--radius-lg)",
+            background: "rgba(255,255,255,.03)",
+            border: "1px solid rgba(255,255,255,.08)",
+            color: "rgba(255,255,255,.35)", fontFamily: "var(--font-sans)",
+            fontWeight: 600, fontSize: "0.8125rem",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+            touchAction: "manipulation",
+          }}>
+            <Icon name="flag" size={14} color="rgba(255,255,255,.3)" strokeWidth={2} />
+            Spielende
+          </button>
+        )}
       </div>
 
       {/* ── Action sheet ── */}
@@ -792,6 +810,40 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, initialRoles =
                   </div>
                 </div>
               ))}
+            </div>
+          </SheetSurface>
+        </Scrim>
+      )}
+
+      {/* ── End game ── */}
+      {endGame && (
+        <Scrim onClose={() => setEndGame(false)}>
+          <SheetSurface>
+            <Grabber />
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              fontWeight: 700, fontSize: "0.9375rem", marginBottom: "0.75rem",
+            }}>
+              <Icon name="flag" size={17} color="rgba(255,255,255,.6)" />
+              Spiel beenden
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: "0.75rem", marginBottom: "1rem",
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              <span style={{ fontWeight: 900, fontSize: "3rem", lineHeight: 1, color: "#fff" }}>{score.us}</span>
+              <span style={{ fontWeight: 700, fontSize: "2rem", color: "rgba(255,255,255,.25)" }}>:</span>
+              <span style={{ fontWeight: 900, fontSize: "3rem", lineHeight: 1, color: "rgba(255,255,255,.35)" }}>{score.them}</span>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <Button variant="secondary" size="md" fullWidth onClick={() => setEndGame(false)}>
+                Abbrechen
+              </Button>
+              <Button variant="primary" size="md" fullWidth icon="check"
+                onClick={() => onEndGame({ us: score.us, them: score.them })}>
+                Speichern &amp; beenden
+              </Button>
             </div>
           </SheetSurface>
         </Scrim>

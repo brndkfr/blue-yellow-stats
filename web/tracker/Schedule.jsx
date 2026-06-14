@@ -88,7 +88,7 @@ function GameCardRow({ game, emphasis, onOpen, onEdit }) {
   );
 }
 
-function Schedule({ games, onOpen, onEdit, onNewGame, onSettings }) {
+function Schedule({ games, onOpen, onEdit, onNewGame, onSettings, onEditSquad }) {
   const today    = games.filter((g) => g.group === "today");
   const upcoming = games.filter((g) => g.group === "upcoming");
   const past     = games.filter((g) => g.group === "past");
@@ -152,7 +152,19 @@ function Schedule({ games, onOpen, onEdit, onNewGame, onSettings }) {
           paddingTop: "1.25rem",
           display: "flex", flexDirection: "column", gap: "0.65rem",
         }}>
-          <SectionLabel>Kader</SectionLabel>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <SectionLabel>Kader</SectionLabel>
+            <button onClick={onEditSquad} title="Kader verwalten" style={{
+              appearance: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: "0.3rem",
+              background: "none", border: "none", padding: "0.2rem 0",
+              fontSize: "0.6875rem", fontWeight: 600, color: "rgba(255,255,255,.3)",
+              letterSpacing: "0.04em", touchAction: "manipulation",
+            }}>
+              <Icon name="pencil" size={11} color="rgba(255,255,255,.3)" strokeWidth={2} />
+              Bearbeiten
+            </button>
+          </div>
           <button onClick={() => onOpen(null)} style={{
             appearance: "none", cursor: "pointer", textAlign: "left", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "space-between",

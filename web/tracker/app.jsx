@@ -125,10 +125,12 @@ function _parseGame(row) {
     date:         rawDate,
     time:         row.time         || '',
     home:         String(row.home).toLowerCase() !== 'no',
-    type:         row.type         || 'regular',
-    venue:        row.venue        || '',
-    format:       Number(row.format) || 2,
-    _rawDate:     isoDate,
+    type:               row.type               || 'regular',
+    venue:              row.venue              || '',
+    format:             Number(row.format)     || 2,
+    minutes_per_period: Number(row.minutes_per_period) || 20,
+    result:             row.result             || '',
+    _rawDate:           isoDate,
   };
 }
 
@@ -170,6 +172,7 @@ function App() {
   const [editingGame,   setEditingGame]  = React.useState(null);
   const [editRoster,    setEditRoster]   = React.useState(null);
   const [showSettings,  setShowSettings] = React.useState(false);
+  const [squadEdit,     setSquadEdit]    = React.useState(false);
 
   // Load squad + games from Sheets whenever scriptUrl is set
   React.useEffect(() => {
@@ -336,6 +339,42 @@ function App() {
       initialRoles={initialRoles}
       scriptUrl={scriptUrl}
       onBack={() => setScreen('schedule')}
+      onEndGame={async ({ us, them }) => {
+        const result = `${us}:${them}`;
+        if (scriptUrl && game.id) {
+          try {
+            await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
+              action_type:       'saveGame',
+              game_id:           game.id,
+              display_name:      game.display_name || '',
+              game_date:         game.date         || '',
+              game_start:        game.time         || '',
+              opponent:          game.opponent     || '',
+              type:              game.type         || '',
+              venue:             game.venue        || '',
+              home:              game.home ? 'yes' : 'no',
+              format:            String(game.format || 2),
+              minutes_per_period: String(game.minutes_per_period || 20),
+              team:              'Jets U14B Blau',
+              result,
+            })});
+          } catch (_) {}
+        }
+        setGames((prev) => prev.map((g) => g.id === game.id ? { ...g, result } : g));
+        setScreen('schedule');
+      }}
+    />;
+  }
+  if (screen === 'squad') {
+    return <SquadEditor
+      goalies={goalies}
+      players={players}
+      scriptUrl={scriptUrl}
+      onBack={() => setSquadEdit(false) || setScreen('schedule')}
+      onSave={(updatedPlayers) => {
+        setPlayers(updatedPlayers);
+        setScreen('schedule');
+      }}
     />;
   }
   const shortUrl = scriptUrl.replace(/^https:\/\/script\.google\.com\/macros\/s\//, '').slice(0, 24) + '…';
@@ -348,6 +387,7 @@ function App() {
         onEdit={handleEditGame}
         onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
         onSettings={() => setShowSettings(true)}
+        onEditSquad={() => setScreen('squad')}
       />
 
       {/* Settings sheet */}

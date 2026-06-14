@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v9';
+const VERSION           = 'v10';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -78,7 +78,7 @@ function _ensureEventsHeader(sheet) {
   _ensureHeader(sheet, [
     'game_id', 'game_date', 'game_start', 'opponent', 'type', 'venue', 'home',
     'period', 'timestamp',
-    'player_id', 'player_nr', 'player_name',
+    'player_id', 'player_nr', 'player_name', 'player_role',
     'action',
     'assist_id', 'assist_nr', 'assist_name',
     'power_play', 'reason',
@@ -146,6 +146,19 @@ function _migrateEventsHeader(sheet) {
         sheet.insertColumnAfter(actionIdx + 1 + i);
         sheet.getRange(1, actionIdx + 2 + i).setValue(col);
       });
+    }
+  }
+}
+
+/** Insert player_role after player_name if the Events sheet predates that column. */
+function _migrateEventsHeaderV2(sheet) {
+  if (sheet.getLastRow() === 0) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('player_role')) {
+    const nameIdx = headers.indexOf('player_name');
+    if (nameIdx !== -1) {
+      sheet.insertColumnAfter(nameIdx + 1);
+      sheet.getRange(1, nameIdx + 2).setValue('player_role');
     }
   }
 }
@@ -237,6 +250,7 @@ function _handleEvent(ss, p) {
   const evSh = _getOrCreate(ss, EVENTS_SHEET);
   _ensureEventsHeader(evSh);
   _migrateEventsHeader(evSh);
+  _migrateEventsHeaderV2(evSh);
 
   evSh.appendRow([
     p.game_id       || '',
@@ -251,6 +265,7 @@ function _handleEvent(ss, p) {
     Number(p.player_id)  || '',
     Number(p.player_nr)  || 0,
     p.player_name   || '',
+    p.player_role   || '',
     p.action        || '',
     Number(p.assist_id)  || '',
     Number(p.assist_nr)  || '',
