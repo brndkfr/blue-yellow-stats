@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v7';
+const VERSION           = 'v8';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -122,6 +122,34 @@ function _upsertRow(sheet, keyCol, keyVal, newRow) {
   return -1;
 }
 
+/** Add player_id and assist columns if the Events sheet predates those columns. */
+function _migrateEventsHeader(sheet) {
+  if (sheet.getLastRow() === 0) return;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Insert player_id after timestamp
+  if (!headers.includes('player_id')) {
+    const tsIdx = headers.indexOf('timestamp');
+    if (tsIdx !== -1) {
+      sheet.insertColumnAfter(tsIdx + 1);
+      sheet.getRange(1, tsIdx + 2).setValue('player_id');
+      headers.splice(tsIdx + 1, 0, 'player_id');
+    }
+  }
+
+  // Insert assist_id, assist_nr, assist_name, power_play, reason after action
+  if (!headers.includes('assist_id')) {
+    const actionIdx = headers.indexOf('action');
+    if (actionIdx !== -1) {
+      const newCols = ['assist_id', 'assist_nr', 'assist_name', 'power_play', 'reason'];
+      newCols.forEach((col, i) => {
+        sheet.insertColumnAfter(actionIdx + 1 + i);
+        sheet.getRange(1, actionIdx + 2 + i).setValue(col);
+      });
+    }
+  }
+}
+
 /** Insert display_name as column B if the Games sheet predates that column. */
 function _migrateGamesHeader(sheet) {
   if (sheet.getLastRow() === 0) return;
@@ -191,6 +219,7 @@ function doPost(e) {
 function _handleEvent(ss, p) {
   const evSh = _getOrCreate(ss, EVENTS_SHEET);
   _ensureEventsHeader(evSh);
+  _migrateEventsHeader(evSh);
 
   evSh.appendRow([
     p.game_id       || '',
