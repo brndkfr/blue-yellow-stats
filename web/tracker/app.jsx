@@ -2,7 +2,21 @@
    Data is loaded from Google Sheets via the Apps Script endpoint (scriptUrl).
    The URL is stored in localStorage under "jets_script_url". */
 
-const LS_KEY_URL = 'jets_script_url';
+const LS_KEY_URL      = 'jets_script_url';
+const LS_CACHE_SQUAD  = 'jets_cache_squad';
+const LS_CACHE_GAMES  = 'jets_cache_games';
+const LS_CACHE_ROSTER = 'jets_cache_roster_';
+
+function _readCache(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; }
+}
+function _writeCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) {}
+}
+function _clearAllCaches() {
+  [LS_CACHE_SQUAD, LS_CACHE_GAMES].forEach((k) => localStorage.removeItem(k));
+  Object.keys(localStorage).filter((k) => k.startsWith(LS_CACHE_ROSTER)).forEach((k) => localStorage.removeItem(k));
+}
 
 // ---------------------------------------------------------------------------
 // Config screen — shown when no script URL is stored
@@ -134,6 +148,17 @@ function _parseGame(row) {
   };
 }
 
+function _applyRoster(rows, goalies, players) {
+  const selected = rows.filter((r) => String(r.selected).toLowerCase() !== 'no');
+  const selIds   = new Set(selected.map((r) => Number(r.player_id)));
+  const rGoalies = goalies.filter((p) => selIds.has(p.id));
+  const rPlayers = players.filter((p) => selIds.has(p.id));
+  const roles    = {};
+  selected.forEach((r) => { if (r.role) roles[Number(r.player_id)] = r.role; });
+  [...rGoalies, ...rPlayers].forEach((p) => { if (!roles[p.id] && p.role) roles[p.id] = p.role; });
+  return { rGoalies, rPlayers, roles };
+}
+
 function _splitSquad(squadRows) {
   const goalies = [];
   const players = [];
@@ -174,68 +199,80 @@ function App() {
   const [showSettings,  setShowSettings] = React.useState(false);
   const [squadEdit,     setSquadEdit]    = React.useState(false);
 
-  // Load squad + games from Sheets whenever scriptUrl is set
+  // Load squad + games — stale-while-revalidate: serve cache instantly, refresh in background
   React.useEffect(() => {
     if (!scriptUrl) return;
     // eslint-disable-next-line no-unused-expressions
     refreshKey; // tracked so retry increments trigger a re-fetch
-    setLoading(true);
     setLoadError('');
+
+    const cachedSquad = _readCache(LS_CACHE_SQUAD);
+    const cachedGames = _readCache(LS_CACHE_GAMES);
+    const hasCache    = cachedSquad && cachedGames;
+
+    if (hasCache) {
+      const { goalies: g, players: p } = _splitSquad(cachedSquad);
+      setGoalies(g); setPlayers(p);
+      setGames(cachedGames.map(_parseGame));
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     Promise.all([
       fetch(`${scriptUrl}?action=squad`).then((r) => r.json()),
       fetch(`${scriptUrl}?action=games`).then((r) => r.json()),
     ])
       .then(([squadRows, gameRows]) => {
+        _writeCache(LS_CACHE_SQUAD, squadRows);
+        _writeCache(LS_CACHE_GAMES, gameRows);
         const { goalies: g, players: p } = _splitSquad(squadRows);
-        setGoalies(g);
-        setPlayers(p);
+        setGoalies(g); setPlayers(p);
         setGames(gameRows.map(_parseGame));
       })
       .catch((err) => {
-        setLoadError(`Could not load data: ${err.message}`);
+        if (!hasCache) setLoadError(`Could not load data: ${err.message}`);
       })
       .finally(() => setLoading(false));
   }, [scriptUrl, refreshKey]);
 
   function handleConfigSave(url) {
     localStorage.setItem(LS_KEY_URL, url);
+    _clearAllCaches();
     setScriptUrl(url);
   }
 
-  async function openGame(g) {
+  function openGame(g) {
     if (!g) return; // Vollkader now routes to squad editor, not tracker
 
-    // Try to fetch the saved game roster
     let rGoalies = goalies;
     let rPlayers = players;
     let roles    = {};
 
-    if (scriptUrl && g.id) {
-      try {
-        const rows = await fetch(`${scriptUrl}?action=gameRoster&game_id=${encodeURIComponent(g.id)}`).then((r) => r.json());
-        if (rows.length > 0) {
-          const selected = rows.filter((r) => String(r.selected).toLowerCase() !== 'no');
-          const selIds   = new Set(selected.map((r) => Number(r.player_id)));
-          rGoalies = goalies.filter((p) => selIds.has(p.id));
-          rPlayers = players.filter((p) => selIds.has(p.id));
-          selected.forEach((r) => {
-            if (r.role) roles[Number(r.player_id)] = r.role;
-          });
-          // Fall back to squad default role if no per-game role set
-          [...rGoalies, ...rPlayers].forEach((p) => {
-            if (!roles[p.id] && p.role) roles[p.id] = p.role;
-          });
-        }
-      } catch (_) {
-        // Network error — fall back to full squad silently
-      }
-    }
-
-    // Also carry over any in-memory roster set by the editor (_goalies/_players/_roles)
+    // In-memory override from RosterEditor takes priority
     if (g._goalies) rGoalies = g._goalies;
     if (g._players) rPlayers = g._players;
     if (g._roles)   roles    = g._roles;
+
+    if (!g._goalies && scriptUrl && g.id) {
+      // Try cached roster for instant navigation
+      const cached = _readCache(LS_CACHE_ROSTER + g.id);
+      if (cached && cached.length > 0) {
+        ({ rGoalies, rPlayers, roles } = _applyRoster(cached, goalies, players));
+      }
+      // Always refresh in background
+      fetch(`${scriptUrl}?action=gameRoster&game_id=${encodeURIComponent(g.id)}`)
+        .then((r) => r.json())
+        .then((rows) => {
+          if (rows.length > 0) {
+            _writeCache(LS_CACHE_ROSTER + g.id, rows);
+            const applied = _applyRoster(rows, goalies, players);
+            setActiveGoalies(applied.rGoalies);
+            setActivePlayers(applied.rPlayers);
+          }
+        })
+        .catch(() => {});
+    }
 
     setGame(g);
     setActiveGoalies(rGoalies);
@@ -244,16 +281,19 @@ function App() {
     setScreen('tracker');
   }
 
-  async function handleEditGame(g) {
-    let rosterRows = [];
-    if (scriptUrl && g.id) {
-      try {
-        rosterRows = await fetch(`${scriptUrl}?action=gameRoster&game_id=${encodeURIComponent(g.id)}`).then((r) => r.json());
-      } catch (_) {}
-    }
+  function handleEditGame(g) {
+    // Navigate immediately with cached roster (or empty → RosterEditor defaults all selected)
+    const cached = scriptUrl && g.id ? (_readCache(LS_CACHE_ROSTER + g.id) || []) : [];
     setEditingGame(g);
-    setEditRoster(rosterRows);
+    setEditRoster(cached);
     setScreen('editor');
+    // Refresh cache in background; RosterEditor is already mounted so this helps next open
+    if (scriptUrl && g.id) {
+      fetch(`${scriptUrl}?action=gameRoster&game_id=${encodeURIComponent(g.id)}`)
+        .then((r) => r.json())
+        .then((rows) => _writeCache(LS_CACHE_ROSTER + g.id, rows))
+        .catch(() => {});
+    }
   }
 
   function saveFromEditor(g, gList, pList, roles) {
@@ -269,6 +309,14 @@ function App() {
       if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
       return [...prev, updated];
     });
+    // Cache the roster so next open is instant
+    if (g.id) {
+      const rosterForCache = [
+        ...gList.map((p) => ({ player_id: p.id, number: p.nr, name: p.name, selected: 'yes', role: '' })),
+        ...pList.map((p) => ({ player_id: p.id, number: p.nr, name: p.name, selected: 'yes', role: roles[p.id] || '' })),
+      ];
+      _writeCache(LS_CACHE_ROSTER + g.id, rosterForCache);
+    }
     setEditingGame(null);
     setEditRoster(null);
     setScreen('schedule');
@@ -300,7 +348,7 @@ function App() {
           Retry
         </Button>
         <button
-          onClick={() => { localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); }}
+          onClick={() => { _clearAllCaches(); localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); }}
           style={{
             appearance: 'none', background: 'none', border: 'none',
             color: 'rgba(255,255,255,.3)', fontSize: '0.75rem', cursor: 'pointer',
@@ -331,28 +379,36 @@ function App() {
       initialRoles={initialRoles}
       scriptUrl={scriptUrl}
       onBack={() => setScreen('schedule')}
-      onEndGame={async ({ us, them }) => {
+      onEndGame={({ us, them }) => {
         const result = `${us}:${them}`;
+        // Fire-and-forget save
         if (scriptUrl && game.id) {
-          try {
-            await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
-              action_type:       'saveGame',
-              game_id:           game.id,
-              display_name:      game.display_name || '',
-              game_date:         game.date         || '',
-              game_start:        game.time         || '',
-              opponent:          game.opponent     || '',
-              type:              game.type         || '',
-              venue:             game.venue        || '',
-              home:              game.home ? 'yes' : 'no',
-              format:            String(game.format || 2),
-              minutes_per_period: String(game.minutes_per_period || 20),
-              team:              'Jets U14B Blau',
-              result,
-            })});
-          } catch (_) {}
+          fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
+            action_type:       'saveGame',
+            game_id:           game.id,
+            display_name:      game.display_name || '',
+            game_date:         game.date         || '',
+            game_start:        game.time         || '',
+            opponent:          game.opponent     || '',
+            type:              game.type         || '',
+            venue:             game.venue        || '',
+            home:              game.home ? 'yes' : 'no',
+            format:            String(game.format || 2),
+            minutes_per_period: String(game.minutes_per_period || 20),
+            team:              'Jets U14B Blau',
+            result,
+          }) }).catch(() => {});
         }
-        setGames((prev) => prev.map((g) => g.id === game.id ? { ...g, result } : g));
+        setGames((prev) => {
+          const updated = prev.map((g) => g.id === game.id ? { ...g, result } : g);
+          _writeCache(LS_CACHE_GAMES, updated.map((g) => ({
+            game_id: g.id, display_name: g.display_name || '', date: g.date, time: g.time || '',
+            opponent: g.opponent, type: g.type, venue: g.venue, home: g.home ? 'yes' : 'no',
+            format: String(g.format || 2), minutes_per_period: String(g.minutes_per_period || 20),
+            team: 'Jets U14B Blau', result: g.id === game.id ? result : (g.result || ''),
+          })));
+          return updated;
+        });
         setScreen('schedule');
       }}
     />;
@@ -366,6 +422,11 @@ function App() {
       onSave={(updatedGoalies, updatedPlayers) => {
         setGoalies(updatedGoalies);
         setPlayers(updatedPlayers);
+        const squadForCache = [
+          ...updatedGoalies.map((g) => ({ id: g.id, number: g.nr, name: g.name, type: 'goalie', role: g.role || '', active: 'yes' })),
+          ...updatedPlayers.map((p) => ({ id: p.id, number: p.nr, name: p.name, type: 'player', role: p.role || '', active: 'yes' })),
+        ];
+        _writeCache(LS_CACHE_SQUAD, squadForCache);
         setScreen('schedule');
       }}
     />;
@@ -419,7 +480,7 @@ function App() {
                 {shortUrl}
               </p>
             </div>
-            <button onClick={() => { setShowSettings(false); setRefreshKey((k) => k + 1); }} style={{
+            <button onClick={() => { _clearAllCaches(); setShowSettings(false); setRefreshKey((k) => k + 1); }} style={{
               appearance: 'none', cursor: 'pointer', width: '100%',
               display: 'flex', alignItems: 'center', gap: '0.75rem',
               background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)',
@@ -429,7 +490,7 @@ function App() {
               <Icon name="refresh-cw" size={16} color="#93c5fd" strokeWidth={2} />
               <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#fff' }}>Daten neu laden</span>
             </button>
-            <button onClick={() => { localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); setShowSettings(false); }} style={{
+            <button onClick={() => { _clearAllCaches(); localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); setShowSettings(false); }} style={{
               appearance: 'none', cursor: 'pointer', width: '100%',
               display: 'flex', alignItems: 'center', gap: '0.75rem',
               background: 'rgba(185,28,28,.1)', border: '1px solid rgba(239,68,68,.22)',

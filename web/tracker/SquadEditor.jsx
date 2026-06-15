@@ -28,7 +28,6 @@ function SquadEditor({ goalies, players, scriptUrl, onBack, onSave }) {
   const [addNr,        setAddNr]        = React.useState('');
   const [addRole,      setAddRole]      = React.useState('center');
   const [addSaving,    setAddSaving]    = React.useState(false);
-  const [saving,       setSaving]       = React.useState(false);
 
   function cycleRole(id) {
     setRoles((prev) => {
@@ -85,34 +84,32 @@ function SquadEditor({ goalies, players, scriptUrl, onBack, onSave }) {
     setAddForm(null);
   }
 
-  async function handleSave() {
-    setSaving(true);
+  function handleSave() {
     const allGoalies = [...goalies, ...addedGoalies];
     const allPlayers = [...players, ...addedPlayers];
     const toUpdate   = [...allGoalies, ...allPlayers].filter((p) => changed.has(p.id));
-
-    if (scriptUrl && toUpdate.length > 0) {
-      try {
-        await Promise.all(toUpdate.map((p) =>
-          fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
-            action_type: 'saveSquadPlayer',
-            id:     String(p.id),
-            number: p.nr && !isNaN(p.nr) ? String(p.nr) : '',
-            name:   p.name,
-            type:   goalies.includes(p) || addedGoalies.includes(p) ? 'goalie' : 'player',
-            role:   roles[p.id] || p.role || '',
-            active: activeMap[p.id] ? 'yes' : 'no',
-          })})
-        ));
-      } catch (_) {}
-    }
-    setSaving(false);
 
     const updatedGoalies = allGoalies.filter((p) => activeMap[p.id] !== false);
     const updatedPlayers = allPlayers
       .filter((p) => activeMap[p.id] !== false)
       .map((p) => ({ ...p, role: roles[p.id] || p.role }));
+
+    // Navigate immediately - fire saves in background
     onSave(updatedGoalies, updatedPlayers);
+
+    if (scriptUrl && toUpdate.length > 0) {
+      Promise.all(toUpdate.map((p) =>
+        fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
+          action_type: 'saveSquadPlayer',
+          id:     String(p.id),
+          number: p.nr && !isNaN(p.nr) ? String(p.nr) : '',
+          name:   p.name,
+          type:   goalies.includes(p) || addedGoalies.includes(p) ? 'goalie' : 'player',
+          role:   roles[p.id] || p.role || '',
+          active: activeMap[p.id] ? 'yes' : 'no',
+        })})
+      )).catch(() => {});
+    }
   }
 
   const allGoalies = [...goalies, ...addedGoalies];
@@ -340,9 +337,9 @@ function SquadEditor({ goalies, players, scriptUrl, onBack, onSave }) {
         borderTop: GOLD_LINE_SQ,
         padding: "0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom))",
       }}>
-        <Button variant="primary" size="lg" fullWidth icon={saving ? "loader" : "check"}
-          disabled={saving || dirtyCount === 0} onClick={handleSave}>
-          {saving ? "Speichern…" : `Speichern${dirtyCount > 0 ? ` (${dirtyCount})` : ""}`}
+        <Button variant="primary" size="lg" fullWidth icon="check"
+          disabled={dirtyCount === 0} onClick={handleSave}>
+          {`Speichern${dirtyCount > 0 ? ` (${dirtyCount})` : ""}`}
         </Button>
       </div>
 

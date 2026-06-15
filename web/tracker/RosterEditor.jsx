@@ -266,8 +266,6 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
     }
     return r;
   });
-  const [saving, setSaving] = React.useState(false);
-
   function toggleGoalie(id) {
     setSelGoalies((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
@@ -282,7 +280,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
     });
   }
 
-  async function handleSave() {
+  function handleSave() {
     const todayIso    = new Date().toISOString().split("T")[0];
     const rawDate     = date || todayIso;
     const [y, m, d]   = rawDate.split("-");
@@ -303,42 +301,11 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
       ...selectedPlayers.map((p) => ({ player_id: p.id, number: p.nr, name: p.name, selected: "yes", role: roles[p.id] || "center" })),
     ];
 
-    if (scriptUrl) {
-      setSaving(true);
-      try {
-        const body = new URLSearchParams({
-          action_type:  "saveGame",
-          game_id:      gameId,
-          display_name: displayName,
-          game_date:    displayDate,
-          game_start:   timeStr,
-          opponent:     oppStr,
-          type:         type,
-          venue:        venue.trim(),
-          home:         "yes",
-          format:            String(format),
-          minutes_per_period: String(minutes),
-          team:              "Jets U14B Blau",
-        });
-        await fetch(scriptUrl, { method: "POST", body });
-
-        const rosterBody = new URLSearchParams({
-          action_type: "saveGameRoster",
-          game_id:     gameId,
-          roster:      JSON.stringify(rosterRows),
-        });
-        await fetch(scriptUrl, { method: "POST", body: rosterBody });
-      } catch (_) {
-        // Network failure — continue locally anyway
-      } finally {
-        setSaving(false);
-      }
-    }
-
     // Build roles map keyed by player id for the tracker
     const rolesById = {};
     selectedPlayers.forEach((p) => { rolesById[p.id] = roles[p.id] || "center"; });
 
+    // Navigate immediately - fire saves in background
     onSave(
       { id: gameId, opponent: oppStr, venue: venue.trim(),
         date: displayDate, time: timeStr, format, minutes_per_period: minutes, home: true, type, _rawDate: rawDate },
@@ -346,6 +313,32 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
       selectedPlayers,
       rolesById,
     );
+
+    if (scriptUrl) {
+      const body = new URLSearchParams({
+        action_type:  "saveGame",
+        game_id:      gameId,
+        display_name: displayName,
+        game_date:    displayDate,
+        game_start:   timeStr,
+        opponent:     oppStr,
+        type:         type,
+        venue:        venue.trim(),
+        home:         "yes",
+        format:            String(format),
+        minutes_per_period: String(minutes),
+        team:              "Jets U14B Blau",
+      });
+      const rosterBody = new URLSearchParams({
+        action_type: "saveGameRoster",
+        game_id:     gameId,
+        roster:      JSON.stringify(rosterRows),
+      });
+      Promise.all([
+        fetch(scriptUrl, { method: "POST", body }),
+        fetch(scriptUrl, { method: "POST", body: rosterBody }),
+      ]).catch(() => {});
+    }
   }
 
   const canStart = isEdit || selGoalies.size + selPlayers.size > 0;
@@ -466,9 +459,9 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
         borderTop: GOLD_LINE_ED,
         padding: "0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom))",
       }}>
-        <Button variant="primary" size="lg" fullWidth icon={saving ? "loader" : "check"}
-          disabled={!canStart || saving} onClick={handleSave}>
-          {saving ? "Speichern…" : "Speichern"}
+        <Button variant="primary" size="lg" fullWidth icon="check"
+          disabled={!canStart} onClick={handleSave}>
+          Speichern
         </Button>
       </div>
 
