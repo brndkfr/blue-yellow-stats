@@ -117,7 +117,7 @@ function SquadEditor({ goalies, players, scriptUrl, onBack, onSave }) {
 
   const allGoalies = [...goalies, ...addedGoalies];
   const allPlayers = [...players, ...addedPlayers];
-  const dirtyCount = changed.size;
+  const dirtyCount = changed.size + addedGoalies.length + addedPlayers.length;
 
   return (
     <div style={{
