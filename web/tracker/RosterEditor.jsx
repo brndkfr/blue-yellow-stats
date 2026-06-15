@@ -136,6 +136,40 @@ function TypePicker({ value, onChange }) {
   );
 }
 
+/* ── HomePicker ── */
+function HomePicker({ value, onChange }) {
+  const opts = [
+    { v: true,  label: "Heimspiel" },
+    { v: false, label: "Auswärtsspiel" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+      <label style={{
+        fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em",
+        textTransform: "uppercase", color: "rgba(255,255,255,.35)",
+      }}>Spielort</label>
+      <div style={{
+        display: "flex", gap: "0.25rem",
+        background: "rgba(255,255,255,.05)", padding: "0.22rem",
+        borderRadius: "var(--radius-lg)",
+      }}>
+        {opts.map((o) => (
+          <button key={String(o.v)} onClick={() => onChange(o.v)} style={{
+            flex: 1, appearance: "none", cursor: "pointer",
+            padding: "0.5rem", border: "none",
+            borderRadius: "var(--radius-md)",
+            background: value === o.v ? "#0033a0" : "transparent",
+            color: value === o.v ? "#fff" : "rgba(255,255,255,.4)",
+            fontFamily: "var(--font-sans)", fontWeight: 600,
+            fontSize: "0.8125rem", transition: "background 100ms ease, color 100ms ease",
+            touchAction: "manipulation",
+          }}>{o.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── FormatPicker ── */
 function FormatPicker({ value, onChange }) {
   const opts = [
@@ -232,6 +266,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
   const [minutes,    setMinutes]    = React.useState(initialGame ? (Number(initialGame.minutes_per_period) || 20) : 20);
   const [date,       setDate]       = React.useState(initialGame ? _toIso(initialGame.date) : "");
   const [time,       setTime]       = React.useState(initialGame ? initialGame.time || "" : "");
+  const [home,       setHome]       = React.useState(initialGame ? (initialGame.home !== false && initialGame.home !== "no") : true);
 
   // Build selected sets from initialRoster if editing; otherwise select all
   const [selGoalies, setSelGoalies] = React.useState(() => {
@@ -308,7 +343,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
     // Navigate immediately - fire saves in background
     onSave(
       { id: gameId, opponent: oppStr, venue: venue.trim(),
-        date: displayDate, time: timeStr, format, minutes_per_period: minutes, home: true, type, _rawDate: rawDate },
+        date: displayDate, time: timeStr, format, minutes_per_period: minutes, home, type, _rawDate: rawDate },
       selectedGoalies,
       selectedPlayers,
       rolesById,
@@ -324,7 +359,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
         opponent:     oppStr,
         type:         type,
         venue:        venue.trim(),
-        home:         "yes",
+        home:         home ? "yes" : "no",
         format:            String(format),
         minutes_per_period: String(minutes),
         team:              "Jets U14B Blau",
@@ -391,6 +426,7 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
           </div>
           <TextInput label="Gegner" value={opponent} onChange={setOpponent} placeholder="z.B. Zürich Dragons" />
           <TextInput label="Spielort" value={venue} onChange={setVenue} placeholder="z.B. Sporthalle Stighag, Kloten" />
+          <HomePicker value={home} onChange={setHome} />
           <TypePicker value={type} onChange={setType} />
           <MinutesPicker value={minutes} onChange={setMinutes} />
           <FormatPicker value={format} onChange={setFormat} />
