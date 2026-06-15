@@ -481,3 +481,519 @@ function setup() {
   Logger.log('Setup complete.');
   SpreadsheetApp.getUi().alert('Jets Tracker setup complete!\n\nSheets created: Events, Games, Squad, GameRoster, Scouts.\nNow deploy as Web App and paste the URL into config.js.');
 }
+
+// ---------------------------------------------------------------------------
+// onOpen — custom spreadsheet menu (installed trigger)
+// ---------------------------------------------------------------------------
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Jets Stats')
+    .addItem('Alle Spiele',   'computeStatsAll')
+    .addItem('Meisterschaft', 'computeStatsRegular')
+    .addItem('Cup',           'computeStatsCup')
+    .addItem('Testspiele',    'computeStatsTest')
+    .addToUi();
+}
+
+function computeStatsAll()     { computeStats_(null); }
+function computeStatsRegular() { computeStats_('regular'); }
+function computeStatsCup()     { computeStats_('cup'); }
+function computeStatsTest()    { computeStats_('test'); }
+
+// ---------------------------------------------------------------------------
+// computeStats_ — main analytics function
+// ---------------------------------------------------------------------------
+
+const STATS_SHEET  = 'Stats';
+const _S_NAVY      = '#0033a0';
+const _S_LBLUE     = '#dce9ff';
+const _S_HDRBG     = '#e0e7f5';
+const _S_ALTROW    = '#f5f7fc';
+
+function computeStats_(typeFilter) {
+  const ss      = SpreadsheetApp.getActiveSpreadsheet();
+  const events  = _sheetData(ss, EVENTS_SHEET);
+  const squad   = _sheetData(ss, SQUAD_SHEET);
+  const games   = _sheetData(ss, GAMES_SHEET);
+  const rosters = _sheetData(ss, GAME_ROSTER_SHEET);
+
+  const filteredGames   = typeFilter ? games.filter(function(g) { return g.type === typeFilter; }) : games;
+  const filteredGameIds = new Set(filteredGames.map(function(g) { return String(g.game_id); }));
+  const filteredEvents  = events.filter(function(e) { return filteredGameIds.has(String(e.game_id)); });
+  const filteredRosters = rosters.filter(function(r) { return filteredGameIds.has(String(r.game_id)); });
+
+  var sh = ss.getSheetByName(STATS_SHEET);
+  if (!sh) sh = ss.insertSheet(STATS_SHEET);
+  sh.getCharts().forEach(function(c) { sh.removeChart(c); });
+  sh.clearContents();
+  sh.clearFormats();
+
+  var FILTER_LABELS = { regular: 'Meisterschaft', cup: 'Cup', test: 'Testspiele' };
+  var filterLabel   = typeFilter ? FILTER_LABELS[typeFilter] : 'Alle Spiele';
+  var stamp         = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM.yyyy HH:mm');
+
+  // Build player map id -> squad object
+  var playerMap = {};
+  squad.forEach(function(p) { playerMap[String(p.id)] = p; });
+
+  // Events grouped by game_id
+  var eventsByGame = {};
+  filteredEvents.forEach(function(e) {
+    var gid = String(e.game_id);
+    if (!eventsByGame[gid]) eventsByGame[gid] = [];
+    eventsByGame[gid].push(e);
+  });
+
+  // Events grouped by player_id
+  var playerEvents = {};
+  filteredEvents.forEach(function(e) {
+    var pid = String(e.player_id);
+    if (!pid || pid === '0' || pid === '') return;
+    if (!playerEvents[pid]) playerEvents[pid] = [];
+    playerEvents[pid].push(e);
+  });
+
+  // Goals where assist_id is set, grouped by assist_id
+  var assistEvents = {};
+  filteredEvents.filter(function(e) { return e.action === 'goal' && e.assist_id; })
+    .forEach(function(e) {
+      var aid = String(e.assist_id);
+      if (!assistEvents[aid]) assistEvents[aid] = [];
+      assistEvents[aid].push(e);
+    });
+
+  // Player game appearances from roster (selected='yes')
+  var playerGames = {};
+  filteredRosters.filter(function(r) { return String(r.selected).toLowerCase() !== 'no'; })
+    .forEach(function(r) {
+      var pid = String(r.player_id);
+      if (!playerGames[pid]) playerGames[pid] = new Set();
+      playerGames[pid].add(String(r.game_id));
+    });
+
+  // Per-game stats: gf, ga, gd, goalieId, info
+  var gameStats = {};
+  filteredGames.forEach(function(g) {
+    var gid  = String(g.game_id);
+    var evs  = eventsByGame[gid] || [];
+    var gf   = evs.filter(function(e) { return e.action === 'goal'; }).length;
+    var ga   = evs.filter(function(e) { return e.action === 'gegengoal'; }).length;
+    var rstr = filteredRosters.filter(function(r) {
+      return String(r.game_id) === gid && String(r.selected).toLowerCase() !== 'no';
+    });
+    var goalieEntry = rstr.find(function(r) {
+      var sq = playerMap[String(r.player_id)];
+      return sq && sq.type === 'goalie';
+    });
+    gameStats[gid] = {
+      gf: gf, ga: ga, gd: gf - ga,
+      goalieId: goalieEntry ? String(goalieEntry.player_id) : null,
+      info: g,
+    };
+  });
+
+  // --- Write sections ---
+  var row  = 1;
+  var meta = {};
+
+  // Title row
+  sh.getRange(row, 1, 1, 11).merge()
+    .setValue('Jets U14B Blau - Statistiken: ' + filterLabel + '   |   Stand: ' + stamp)
+    .setBackground(_S_NAVY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(12);
+  sh.setRowHeight(row, 36);
+  row += 2;
+
+  // Section 2: Team-Bilanz
+  var bilanzResult = _computeTeamBilanz(gameStats, filteredGames);
+  var s2 = _writeStatsSection(sh, row,
+    'Team-Bilanz',
+    ['Spiele', 'Siege', 'Unentschieden', 'Niederlagen', 'Tore', 'Gegentore', 'Tordifferenz', 'Heimsiege', 'Auswärtssiege'],
+    bilanzResult
+  );
+  meta.teamBilanz = s2; row = s2.nextRow;
+
+  // Section 3: Torerfolge Feldspieler
+  var s3 = _writeStatsSection(sh, row,
+    'Torerfolge Feldspieler',
+    ['Spieler', 'Rolle', 'Spiele', 'Tore', 'Vorlagen', 'Punkte', 'Tore Überzahl', 'Vorlagen Überzahl', 'Torschüsse (Zentrum)', 'Torschussquote'],
+    _computePlayerScoring(playerMap, playerEvents, assistEvents, playerGames)
+  );
+  meta.scoring = s3; row = s3.nextRow;
+
+  // Section 4: Feldspieler Beitrag
+  var s4 = _writeStatsSection(sh, row,
+    'Feldspieler Beitrag (Erweiterte Statistiken)',
+    ['Spieler', 'Anzahl Aktionen', 'Positiv-Anteil', 'Offensiv-Wert', 'Defensiv-Wert', 'Gesamtwert', 'Offensiv-Anteil am Team', 'Leistung Schlussphase', 'Ballgewinn-Balance'],
+    _computePlayerBeitrag(playerMap, playerEvents, assistEvents, filteredEvents, filteredGames)
+  );
+  meta.beitrag = s4; row = s4.nextRow;
+
+  // Section 5: Torwart-Statistiken
+  var s5 = _writeStatsSection(sh, row,
+    'Torwart-Statistiken',
+    ['Torwart', 'Spiele', 'Paraden', 'Mega-Paraden', 'Anteil Mega-Paraden', 'Gegentore', 'Fangquote', 'Torwart-Dominanz-Wert', 'Schlüsselpässe', 'Fehlauswürfe'],
+    _computeGoalieStats(playerMap, playerEvents, gameStats)
+  );
+  meta.goalie = s5; row = s5.nextRow;
+
+  // Section 6: Ergebnisse pro Spiel
+  var s6 = _writeStatsSection(sh, row,
+    'Ergebnisse pro Spiel',
+    ['Datum', 'Gegner', 'Heim/Auswärts', 'Tore', 'Gegentore', 'Tordifferenz', 'Powerplay-Quote', 'Unterzahl gehalten', 'Geloggte Aktionen'],
+    _computePerGame(filteredGames, gameStats, eventsByGame)
+  );
+  meta.perGame = s6; row = s6.nextRow;
+
+  // Section 7: Verbindungsindex
+  var s7 = _writeStatsSection(sh, row,
+    'Verbindungsindex (wer bereitet für wen vor)',
+    ['Torschütze', 'Vorbereiter', 'Gemeinsame Tore'],
+    _computeChemistry(filteredEvents, playerMap)
+  );
+  meta.chemistry = s7; row = s7.nextRow;
+
+  // Section 8: Gegentore nach Ursache
+  var s8 = _writeStatsSection(sh, row,
+    'Gegentore nach Ursache',
+    ['Ursache', 'Anzahl', 'Anteil'],
+    _computeGegengoalReasons(filteredEvents)
+  );
+  meta.reasons = s8; row = s8.nextRow;
+
+  // Section 9: xGA
+  var s9 = _writeStatsSection(sh, row,
+    'Erwartete Gegentore pro Spiel (xGA)',
+    ['Datum', 'Gegner', 'Gegentore (tatsächlich)', 'Erwartete Gegentore', 'Differenz', 'Bewertung'],
+    _computeXGA(filteredGames, gameStats, eventsByGame)
+  );
+  meta.xga = s9; row = s9.nextRow;
+
+  sh.autoResizeColumns(1, 11);
+
+  _insertStatsCharts(sh, meta);
+
+  SpreadsheetApp.getUi().alert('Statistiken berechnet! (' + filterLabel + ')');
+}
+
+// ---------------------------------------------------------------------------
+// Section write helper
+// ---------------------------------------------------------------------------
+
+function _writeStatsSection(sh, startRow, title, headers, dataRows) {
+  var cols    = headers.length;
+  var hasData = dataRows && dataRows.length > 0;
+  var row     = startRow;
+
+  // Section label
+  var tr = sh.getRange(row, 1, 1, cols);
+  if (cols > 1) tr.merge();
+  tr.setValue(title).setBackground(_S_LBLUE).setFontWeight('bold').setFontSize(10);
+  row++;
+
+  // Column header row
+  sh.getRange(row, 1, 1, cols).setValues([headers])
+    .setFontWeight('bold').setBackground(_S_HDRBG);
+  row++;
+
+  var dataStart = row;
+
+  if (hasData) {
+    var paddedRows = dataRows.map(function(r) {
+      var p = r.slice();
+      while (p.length < cols) p.push('');
+      return p;
+    });
+    sh.getRange(row, 1, paddedRows.length, cols).setValues(paddedRows);
+    paddedRows.forEach(function(_, i) {
+      if (i % 2 === 1) sh.getRange(row + i, 1, 1, cols).setBackground(_S_ALTROW);
+    });
+    row += dataRows.length;
+  } else {
+    sh.getRange(row, 1).setValue('Keine Daten verfügbar').setFontColor('#aaaaaa');
+    if (cols > 1) sh.getRange(row, 1, 1, cols).merge();
+    row++;
+  }
+
+  return { nextRow: row + 1, dataStart: dataStart, dataCount: hasData ? dataRows.length : 0, colCount: cols };
+}
+
+// ---------------------------------------------------------------------------
+// Stat computation helpers
+// ---------------------------------------------------------------------------
+
+function _parseGameDate(dateStr) {
+  if (!dateStr) return new Date(0);
+  var parts = String(dateStr).split('.');
+  if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+  return new Date(dateStr);
+}
+
+function _roleLabel(role) {
+  return { center: 'Center', defender: 'Verteidiger', winger: 'Stürmer' }[role] || role || '';
+}
+
+function _pct(v) { return v !== null && v !== undefined ? (v * 100).toFixed(1) + '%' : '–'; }
+function _num(v, d) {
+  if (v === null || v === undefined) return '–';
+  var factor = Math.pow(10, d !== undefined ? d : 1);
+  return Math.round(v * factor) / factor;
+}
+
+function _computeTeamBilanz(gameStats, filteredGames) {
+  var spiele = 0, siege = 0, unentsch = 0, niederl = 0;
+  var tore = 0, gegentore = 0, heimsiege = 0, auswaertssiege = 0;
+  Object.keys(gameStats).forEach(function(gid) {
+    var gs = gameStats[gid];
+    spiele++;
+    tore      += gs.gf;
+    gegentore += gs.ga;
+    var isHome = String(gs.info.home).toLowerCase() === 'yes';
+    if      (gs.gd > 0) { siege++;   if (isHome) heimsiege++; else auswaertssiege++; }
+    else if (gs.gd < 0)   niederl++;
+    else                  unentsch++;
+  });
+  if (spiele === 0) return [];
+  return [[spiele, siege, unentsch, niederl, tore, gegentore, tore - gegentore, heimsiege, auswaertssiege]];
+}
+
+function _computePlayerScoring(playerMap, playerEvents, assistEvents, playerGames) {
+  var rows = [];
+  Object.keys(playerMap).forEach(function(pid) {
+    var player = playerMap[pid];
+    if (player.type !== 'player') return;
+    var evs   = playerEvents[pid]  || [];
+    var assts = assistEvents[pid]  || [];
+    var spiele = playerGames[pid]  ? playerGames[pid].size : 0;
+    if (spiele === 0 && evs.length === 0) return;
+
+    var tore   = evs.filter(function(e) { return e.action === 'goal'; }).length;
+    var ppg    = evs.filter(function(e) { return e.action === 'goal' && e.power_play === 'yes'; }).length;
+    var ppa    = assts.filter(function(e) { return e.power_play === 'yes'; }).length;
+    var shots  = evs.filter(function(e) { return e.action === 'slot_shot'; }).length;
+    var shotPct = shots >= 5 ? _pct(tore / shots) : '–';
+
+    rows.push({
+      data: [player.name, _roleLabel(player.role), spiele, tore, assts.length,
+             tore + assts.length, ppg, ppa, shots, shotPct],
+      sort: tore + assts.length,
+    });
+  });
+  rows.sort(function(a, b) { return b.sort - a.sort; });
+  return rows.map(function(r) { return r.data; });
+}
+
+function _computePlayerBeitrag(playerMap, playerEvents, assistEvents, filteredEvents, filteredGames) {
+  var gameFormatMap = {};
+  filteredGames.forEach(function(g) { gameFormatMap[String(g.game_id)] = Number(g.format) || 2; });
+
+  var teamGoals  = filteredEvents.filter(function(e) { return e.action === 'goal'; }).length;
+  var teamAssts  = filteredEvents.filter(function(e) { return e.action === 'goal' && e.assist_id; }).length;
+  var teamKP     = filteredEvents.filter(function(e) { return e.action === 'key_pass' && e.player_role !== 'goalie'; }).length;
+  var teamShots  = filteredEvents.filter(function(e) { return e.action === 'slot_shot'; }).length;
+  var teamOff    = teamGoals + teamAssts + teamKP + teamShots;
+
+  var rows = [];
+  Object.keys(playerMap).forEach(function(pid) {
+    var player = playerMap[pid];
+    if (player.type !== 'player') return;
+    var evs   = playerEvents[pid] || [];
+    var assts = assistEvents[pid] || [];
+    if (evs.length === 0 && assts.length === 0) return;
+
+    var goals  = evs.filter(function(e) { return e.action === 'goal'; }).length;
+    var kp     = evs.filter(function(e) { return e.action === 'key_pass'; }).length;
+    var shots  = evs.filter(function(e) { return e.action === 'slot_shot'; }).length;
+    var rec    = evs.filter(function(e) { return e.action === 'recovery'; }).length;
+    var def    = evs.filter(function(e) { return e.action === 'defense'; }).length;
+    var bp     = evs.filter(function(e) { return e.action === 'bad_pass'; }).length;
+
+    var pos    = goals + assts.length + kp + shots + rec + def;
+    var neg    = bp;
+    var total  = pos + neg;
+
+    var per    = total > 0    ? pos / total : null;
+    var aii    = goals * 4 + assts.length * 3 + kp * 1.5 + shots;
+    var dii    = rec + def - bp * 0.5;
+    var ars    = aii + dii;
+    var pOff   = goals + assts.length + kp + shots;
+    var dc     = teamOff > 0  ? pOff / teamOff : null;
+
+    var clutchEvs = evs.filter(function(e) {
+      return Number(e.period) === (gameFormatMap[String(e.game_id)] || 2);
+    });
+    var clutch = evs.length > 0 ? clutchEvs.length / evs.length : null;
+    var tb     = (rec + bp) > 0 ? rec / (rec + bp) : null;
+
+    rows.push({
+      data: [player.name, total, _pct(per), _num(aii), _num(dii), _num(ars), _pct(dc), _pct(clutch), _pct(tb)],
+      sort: ars,
+    });
+  });
+  rows.sort(function(a, b) { return b.sort - a.sort; });
+  return rows.map(function(r) { return r.data; });
+}
+
+function _computeGoalieStats(playerMap, playerEvents, gameStats) {
+  var goalieGameIds = {};
+  Object.keys(gameStats).forEach(function(gid) {
+    var gid2 = gameStats[gid].goalieId;
+    if (gid2) {
+      if (!goalieGameIds[gid2]) goalieGameIds[gid2] = [];
+      goalieGameIds[gid2].push(gid);
+    }
+  });
+
+  var rows = [];
+  Object.keys(playerMap).forEach(function(pid) {
+    var player  = playerMap[pid];
+    if (player.type !== 'goalie') return;
+    var evs     = playerEvents[pid] || [];
+    var gameIds = goalieGameIds[pid] || [];
+    if (gameIds.length === 0 && evs.length === 0) return;
+
+    var saves     = evs.filter(function(e) { return e.action === 'save'; }).length;
+    var megaSaves = evs.filter(function(e) { return e.action === 'mega_save'; }).length;
+    var total     = saves + megaSaves;
+    var ga        = gameIds.reduce(function(sum, gid) { return sum + (gameStats[gid] ? gameStats[gid].ga : 0); }, 0);
+    var svPct     = (total + ga) >= 3 ? total / (total + ga) : null;
+    var msvPct    = total > 0 ? megaSaves / total : null;
+    var gds       = (total + ga) > 0 ? (megaSaves * 2 + saves) / (total + ga) : null;
+    var kp        = evs.filter(function(e) { return e.action === 'key_pass'; }).length;
+    var bt        = evs.filter(function(e) { return e.action === 'bad_throw'; }).length;
+
+    rows.push({
+      data: [player.name, gameIds.length, total, megaSaves, _pct(msvPct), ga, _pct(svPct), _num(gds, 2), kp, bt],
+      sort: gameIds.length * 100 + total,
+    });
+  });
+  rows.sort(function(a, b) { return b.sort - a.sort; });
+  return rows.map(function(r) { return r.data; });
+}
+
+function _computePerGame(filteredGames, gameStats, eventsByGame) {
+  return filteredGames
+    .slice()
+    .sort(function(a, b) { return _parseGameDate(b.date) - _parseGameDate(a.date); })
+    .map(function(g) {
+      var gid  = String(g.game_id);
+      var gs   = gameStats[gid] || { gf: 0, ga: 0, gd: 0 };
+      var evs  = eventsByGame[gid] || [];
+      var ppS  = evs.filter(function(e) { return e.action === 'pp_scored'; }).length;
+      var ppE  = evs.filter(function(e) { return e.action === 'pp_expired'; }).length;
+      var bxK  = evs.filter(function(e) { return e.action === 'box_killed'; }).length;
+      var bxC  = evs.filter(function(e) { return e.action === 'box_conceded'; }).length;
+      return [
+        g.date || '',
+        g.opponent || '',
+        String(g.home).toLowerCase() === 'yes' ? 'Heim' : 'Auswärts',
+        gs.gf, gs.ga, gs.gd,
+        (ppS + ppE) > 0 ? _pct(ppS / (ppS + ppE)) : '–',
+        (bxK + bxC) > 0 ? _pct(bxK / (bxK + bxC)) : '–',
+        evs.length,
+      ];
+    });
+}
+
+function _computeChemistry(filteredEvents, playerMap) {
+  var pairs = {};
+  filteredEvents.filter(function(e) { return e.action === 'goal' && e.assist_id && e.player_id; })
+    .forEach(function(e) {
+      var key = e.player_id + '___' + e.assist_id;
+      pairs[key] = (pairs[key] || 0) + 1;
+    });
+  return Object.keys(pairs)
+    .sort(function(a, b) { return pairs[b] - pairs[a]; })
+    .map(function(key) {
+      var parts    = key.split('___');
+      var scorer   = playerMap[parts[0]]  ? playerMap[parts[0]].name  : '#' + parts[0];
+      var assister = playerMap[parts[1]]  ? playerMap[parts[1]].name  : '#' + parts[1];
+      return [scorer, assister, pairs[key]];
+    });
+}
+
+function _computeGegengoalReasons(filteredEvents) {
+  var labelMap = {
+    counter:     'Konter',
+    free_shot:   'Freier Schuss',
+    no_coverage: 'Deckungsfehler',
+    bad_pass:    'Fehlpass',
+    power_play:  'Überzahl Gegner',
+    unlucky:     'Pech',
+    '':          'Ohne Angabe',
+  };
+  var counts = {};
+  Object.keys(labelMap).forEach(function(k) { counts[k] = 0; });
+  filteredEvents.filter(function(e) { return e.action === 'gegengoal'; })
+    .forEach(function(e) { counts[e.reason || ''] = (counts[e.reason || ''] || 0) + 1; });
+  var total = Object.keys(counts).reduce(function(s, k) { return s + counts[k]; }, 0);
+  return Object.keys(labelMap)
+    .filter(function(k) { return counts[k] > 0; })
+    .sort(function(a, b) { return counts[b] - counts[a]; })
+    .map(function(k) { return [labelMap[k], counts[k], total > 0 ? _pct(counts[k] / total) : '–']; });
+}
+
+function _computeXGA(filteredGames, gameStats, eventsByGame) {
+  var weights = { counter: 1.0, free_shot: 0.9, no_coverage: 0.8, power_play: 0.7, bad_pass: 0.6, unlucky: 0.3, '': 0.7 };
+  return filteredGames
+    .slice()
+    .sort(function(a, b) { return _parseGameDate(b.date) - _parseGameDate(a.date); })
+    .map(function(g) {
+      var gid  = String(g.game_id);
+      var evs  = eventsByGame[gid] || [];
+      var gs   = gameStats[gid] || { ga: 0 };
+      var xga  = evs.filter(function(e) { return e.action === 'gegengoal'; })
+                    .reduce(function(s, e) { return s + (weights[e.reason || ''] || 0.7); }, 0);
+      var diff = gs.ga - xga;
+      var bewertung = Math.abs(diff) <= 0.5 ? 'Ausgeglichen' : diff > 0 ? 'Pech' : 'Stark gehalten';
+      return [g.date || '', g.opponent || '', gs.ga, _num(xga, 1), _num(diff, 1), bewertung];
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Chart insertion
+// ---------------------------------------------------------------------------
+
+function _insertStatsCharts(sh, meta) {
+  // Chart 1: Tore & Vorlagen pro Spieler (horizontal bar)
+  if (meta.scoring && meta.scoring.dataCount > 0) {
+    var namesR  = sh.getRange(meta.scoring.dataStart, 1, meta.scoring.dataCount, 1);
+    var valuesR = sh.getRange(meta.scoring.dataStart, 4, meta.scoring.dataCount, 2);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.BAR)
+      .addRange(namesR).addRange(valuesR)
+      .setOption('title', 'Tore & Vorlagen pro Spieler')
+      .setOption('legend', { position: 'bottom' })
+      .setOption('width', 500).setOption('height', Math.max(220, meta.scoring.dataCount * 28 + 80))
+      .setPosition(meta.scoring.dataStart, 13, 0, 0)
+      .build());
+  }
+
+  // Chart 2: Tordifferenz pro Spiel (column)
+  if (meta.perGame && meta.perGame.dataCount > 0) {
+    var dateR = sh.getRange(meta.perGame.dataStart, 1, meta.perGame.dataCount, 1);
+    var gdR   = sh.getRange(meta.perGame.dataStart, 6, meta.perGame.dataCount, 1);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(dateR).addRange(gdR)
+      .setOption('title', 'Tordifferenz pro Spiel')
+      .setOption('legend', { position: 'none' })
+      .setOption('vAxis', { title: 'Tordifferenz', baselineColor: '#888' })
+      .setOption('width', 500).setOption('height', 280)
+      .setPosition(meta.perGame.dataStart, 13, 0, 0)
+      .build());
+  }
+
+  // Chart 3: Gegentore nach Ursache (pie)
+  if (meta.reasons && meta.reasons.dataCount > 0) {
+    var reasonR = sh.getRange(meta.reasons.dataStart, 1, meta.reasons.dataCount, 2);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.PIE)
+      .addRange(reasonR)
+      .setOption('title', 'Gegentore nach Ursache')
+      .setOption('pieHole', 0.35)
+      .setOption('width', 420).setOption('height', 300)
+      .setPosition(meta.reasons.dataStart, 13, 0, 0)
+      .build());
+  }
+}
