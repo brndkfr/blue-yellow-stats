@@ -24,11 +24,23 @@ function EditorTile({ nr, name, role = "player", selected, playerRole, onToggle,
         borderRadius: "var(--radius-xl)",
         border: selected
           ? "1px solid rgba(255,255,255,.1)"
-          : "1px solid rgba(255,255,255,.04)",
-        opacity: selected ? 1 : 0.38,
+          : "1px dashed rgba(255,255,255,.18)",
+        opacity: selected ? 1 : 0.65,
         transition: "opacity 120ms ease, background 120ms ease, border-color 120ms ease",
         touchAction: "manipulation",
       }}>
+
+      {/* Add chip — shown when not selected, signals the tile is tappable */}
+      {!selected && (
+        <span style={{
+          position: "absolute", top: "0.28rem", right: "0.28rem",
+          display: "grid", placeItems: "center",
+          width: "1.2rem", height: "1.2rem",
+          borderRadius: "var(--radius-sm)",
+          background: "rgba(0,180,80,.18)",
+          fontSize: "0.75rem", color: "#4ade80", fontWeight: 700, lineHeight: 1,
+        }}>+</span>
+      )}
 
       {/* Role cycle chip — field players only, shown when selected */}
       {role === "player" && selected && (
