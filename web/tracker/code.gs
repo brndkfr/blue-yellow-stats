@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v13';
+const VERSION           = 'v14';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -671,7 +671,9 @@ function computeStats_(typeFilter) {
 
   sh.autoResizeColumns(1, 11);
 
-  _insertStatsCharts(sh, meta);
+  // Write auxiliary chart data tables (columns 15+) and insert all charts
+  var auxMeta = _writeAuxData(sh, playerMap, playerEvents, assistEvents, filteredEvents, filteredGames, gameStats);
+  _insertStatsCharts(sh, meta, auxMeta);
 
   SpreadsheetApp.getUi().alert('Statistiken berechnet! (' + filterLabel + ')');
 }
@@ -951,11 +953,111 @@ function _computeXGA(filteredGames, gameStats, eventsByGame) {
 }
 
 // ---------------------------------------------------------------------------
+// Auxiliary chart data tables (written to columns 15+ so charts can reference them)
+// ---------------------------------------------------------------------------
+
+function _writeAuxData(sh, playerMap, playerEvents, assistEvents, filteredEvents, filteredGames, gameStats) {
+  var col = 15;
+  var row = 2;
+
+  // --- Bubble data: Angriff vs Abwehr per player ---
+  // BUBBLE chart format: Label | X | Y | Group | Size
+  var bubbleRows = [];
+  Object.keys(playerMap).forEach(function(pid) {
+    var player = playerMap[pid];
+    if (player.type !== 'player') return;
+    var evs   = playerEvents[pid] || [];
+    var assts = assistEvents[pid] || [];
+    if (evs.length + assts.length === 0) return;
+
+    var goals = evs.filter(function(e) { return e.action === 'goal'; }).length;
+    var kp    = evs.filter(function(e) { return e.action === 'key_pass'; }).length;
+    var shots = evs.filter(function(e) { return e.action === 'slot_shot'; }).length;
+    var rec   = evs.filter(function(e) { return e.action === 'recovery'; }).length;
+    var def   = evs.filter(function(e) { return e.action === 'defense'; }).length;
+    var bp    = evs.filter(function(e) { return e.action === 'bad_pass'; }).length;
+    var aii   = goals * 4 + assts.length * 3 + kp * 1.5 + shots;
+    var dii   = rec + def - bp * 0.5;
+    bubbleRows.push([player.name, aii, dii, 'Spieler', 10]);
+  });
+
+  sh.getRange(row, col, 1, 5)
+    .setValues([['Spieler', 'Offensiv-Wert', 'Defensiv-Wert', 'Gruppe', 'Grösse']])
+    .setFontWeight('bold').setBackground('#f0f4ff').setFontSize(8);
+  row++;
+  var bubbleDataStart = row;
+  if (bubbleRows.length > 0) {
+    sh.getRange(row, col, bubbleRows.length, 5).setValues(bubbleRows).setFontSize(8);
+    row += bubbleRows.length;
+  }
+  row += 2;
+
+  // --- Radar data: Torwart profile ---
+  // Format: Fähigkeit | Goalie1 | Goalie2 | ...
+  var goalieGameIds = {};
+  Object.keys(gameStats).forEach(function(gid) {
+    var gId2 = gameStats[gid].goalieId;
+    if (gId2) {
+      if (!goalieGameIds[gId2]) goalieGameIds[gId2] = [];
+      goalieGameIds[gId2].push(gid);
+    }
+  });
+
+  var radarHeaders  = ['Fähigkeit'];
+  var faenQuote     = ['Fangquote (0-100)'];
+  var megaAnteil    = ['Mega-Paraden %'];
+  var schluesselpKP = ['Schlüsselpässe (0-100)'];
+  var zuverl        = ['Zuverlässigkeit (0-100)'];
+
+  Object.keys(playerMap).forEach(function(pid) {
+    var player  = playerMap[pid];
+    if (player.type !== 'goalie') return;
+    var evs     = playerEvents[pid] || [];
+    var gameIds = goalieGameIds[pid] || [];
+    if (gameIds.length === 0 && evs.length === 0) return;
+
+    var saves     = evs.filter(function(e) { return e.action === 'save'; }).length;
+    var megaSaves = evs.filter(function(e) { return e.action === 'mega_save'; }).length;
+    var total     = saves + megaSaves;
+    var ga        = gameIds.reduce(function(s, gid) { return s + (gameStats[gid] ? gameStats[gid].ga : 0); }, 0);
+    var kp        = evs.filter(function(e) { return e.action === 'key_pass'; }).length;
+    var bt        = evs.filter(function(e) { return e.action === 'bad_throw'; }).length;
+
+    radarHeaders.push(player.name);
+    faenQuote.push(    (total + ga) > 0 ? Math.round(total / (total + ga) * 100) : 0);
+    megaAnteil.push(   total > 0 ? Math.round(megaSaves / total * 100) : 0);
+    schluesselpKP.push(Math.min(Math.round(kp / Math.max(gameIds.length, 1) * 100 / 2), 100)); // 2 KP/game = 100
+    zuverl.push(       Math.max(0, 100 - Math.round(bt / Math.max(gameIds.length, 1) * 50)));  // 2 BT/game = 0
+  });
+
+  var radarHeaderRow = row;
+  var radarDataRows  = [faenQuote, megaAnteil, schluesselpKP, zuverl];
+  if (radarHeaders.length > 1) {
+    sh.getRange(row, col, 1, radarHeaders.length).setValues([radarHeaders])
+      .setFontWeight('bold').setBackground('#f0f4ff').setFontSize(8);
+    row++;
+    sh.getRange(row, col, radarDataRows.length, radarHeaders.length).setValues(radarDataRows).setFontSize(8);
+    row += radarDataRows.length;
+  }
+
+  return {
+    bubbleDataStart: bubbleDataStart,
+    bubbleCount:     bubbleRows.length,
+    bubbleCol:       col,
+    radarHeaderRow:  radarHeaderRow,
+    radarDataCount:  radarDataRows.length,
+    radarColCount:   radarHeaders.length,
+    radarCol:        col,
+    hasGoalies:      radarHeaders.length > 1,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Chart insertion
 // ---------------------------------------------------------------------------
 
-function _insertStatsCharts(sh, meta) {
-  // Chart 1: Tore & Vorlagen pro Spieler (horizontal bar)
+function _insertStatsCharts(sh, meta, auxMeta) {
+  // Chart 1: Tore & Vorlagen pro Spieler (stacked horizontal bar)
   if (meta.scoring && meta.scoring.dataCount > 0) {
     var namesR  = sh.getRange(meta.scoring.dataStart, 1, meta.scoring.dataCount, 1);
     var valuesR = sh.getRange(meta.scoring.dataStart, 4, meta.scoring.dataCount, 2);
@@ -963,13 +1065,32 @@ function _insertStatsCharts(sh, meta) {
       .setChartType(Charts.ChartType.BAR)
       .addRange(namesR).addRange(valuesR)
       .setOption('title', 'Tore & Vorlagen pro Spieler')
+      .setOption('isStacked', true)
       .setOption('legend', { position: 'bottom' })
-      .setOption('width', 500).setOption('height', Math.max(220, meta.scoring.dataCount * 28 + 80))
+      .setOption('colors', ['#0033a0', '#ffcd00'])
+      .setOption('width', 520).setOption('height', Math.max(240, meta.scoring.dataCount * 26 + 80))
       .setPosition(meta.scoring.dataStart, 13, 0, 0)
       .build());
   }
 
-  // Chart 2: Tordifferenz pro Spiel (column)
+  // Chart 2: Angriff vs Abwehr (bubble = scatter with player name labels)
+  if (auxMeta && auxMeta.bubbleCount > 0) {
+    var bubbleR = sh.getRange(auxMeta.bubbleDataStart - 1, auxMeta.bubbleCol, auxMeta.bubbleCount + 1, 5);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.BUBBLE)
+      .addRange(bubbleR)
+      .setOption('title', 'Angriff vs Abwehr (Spieler-Profil)')
+      .setOption('hAxis', { title: 'Offensiv-Wert', minValue: 0 })
+      .setOption('vAxis', { title: 'Defensiv-Wert' })
+      .setOption('legend', { position: 'none' })
+      .setOption('bubble', { textStyle: { fontSize: 9 } })
+      .setOption('colors', ['#0033a0'])
+      .setOption('width', 520).setOption('height', 380)
+      .setPosition(meta.beitrag ? meta.beitrag.dataStart : 20, 13, 0, 0)
+      .build());
+  }
+
+  // Chart 3: Tordifferenz pro Spiel (column, positive=navy, negative=red via series color)
   if (meta.perGame && meta.perGame.dataCount > 0) {
     var dateR = sh.getRange(meta.perGame.dataStart, 1, meta.perGame.dataCount, 1);
     var gdR   = sh.getRange(meta.perGame.dataStart, 6, meta.perGame.dataCount, 1);
@@ -978,22 +1099,42 @@ function _insertStatsCharts(sh, meta) {
       .addRange(dateR).addRange(gdR)
       .setOption('title', 'Tordifferenz pro Spiel')
       .setOption('legend', { position: 'none' })
+      .setOption('colors', ['#0033a0'])
       .setOption('vAxis', { title: 'Tordifferenz', baselineColor: '#888' })
-      .setOption('width', 500).setOption('height', 280)
+      .setOption('width', 520).setOption('height', 300)
       .setPosition(meta.perGame.dataStart, 13, 0, 0)
       .build());
   }
 
-  // Chart 3: Gegentore nach Ursache (pie)
+  // Chart 4: Gegentore nach Ursache (donut pie)
   if (meta.reasons && meta.reasons.dataCount > 0) {
     var reasonR = sh.getRange(meta.reasons.dataStart, 1, meta.reasons.dataCount, 2);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.PIE)
       .addRange(reasonR)
       .setOption('title', 'Gegentore nach Ursache')
-      .setOption('pieHole', 0.35)
-      .setOption('width', 420).setOption('height', 300)
+      .setOption('pieHole', 0.4)
+      .setOption('width', 440).setOption('height', 320)
       .setPosition(meta.reasons.dataStart, 13, 0, 0)
       .build());
+  }
+
+  // Chart 5: Torwart-Profil (radar)
+  if (auxMeta && auxMeta.hasGoalies) {
+    try {
+      var radarR = sh.getRange(auxMeta.radarHeaderRow, auxMeta.radarCol, auxMeta.radarDataCount + 1, auxMeta.radarColCount);
+      sh.insertChart(sh.newChart()
+        .setChartType(Charts.ChartType.RADAR)
+        .addRange(radarR)
+        .setOption('title', 'Torwart-Profil (0-100)')
+        .setOption('legend', { position: 'bottom' })
+        .setOption('radarShape', 'polygon')
+        .setOption('colors', ['#0033a0', '#ffcd00', '#4ade80'])
+        .setOption('width', 420).setOption('height', 360)
+        .setPosition(meta.goalie ? meta.goalie.dataStart : 40, 13, 0, 0)
+        .build());
+    } catch (e) {
+      // Radar not supported in this Sheets version - skip silently
+    }
   }
 }
