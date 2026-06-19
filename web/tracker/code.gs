@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v14';
+const VERSION           = 'v15';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -489,10 +489,12 @@ function setup() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Jets Stats')
-    .addItem('Alle Spiele',   'computeStatsAll')
-    .addItem('Meisterschaft', 'computeStatsRegular')
-    .addItem('Cup',           'computeStatsCup')
-    .addItem('Testspiele',    'computeStatsTest')
+    .addItem('Alle Spiele',          'computeStatsAll')
+    .addItem('Meisterschaft',        'computeStatsRegular')
+    .addItem('Cup',                  'computeStatsCup')
+    .addItem('Testspiele',           'computeStatsTest')
+    .addSeparator()
+    .addItem('Aktuelles Spiel analysieren', 'analyzeCurrentGame')
     .addToUi();
 }
 
@@ -1136,5 +1138,286 @@ function _insertStatsCharts(sh, meta, auxMeta) {
     } catch (e) {
       // Radar not supported in this Sheets version - skip silently
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-game tab analysis
+// ---------------------------------------------------------------------------
+
+function analyzeCurrentGame() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getActiveSheet();
+  var sheetName = sh.getName();
+
+  // Find this game in the Games sheet by display_name or game_id
+  var gamesData = _sheetData(ss, GAMES_SHEET);
+  var gameId = null;
+  var gameInfo = null;
+  for (var i = 0; i < gamesData.length; i++) {
+    var g = gamesData[i];
+    if (g.display_name === sheetName || g.game_id === sheetName) {
+      gameId = g.game_id;
+      gameInfo = g;
+      break;
+    }
+  }
+  if (!gameId) {
+    SpreadsheetApp.getUi().alert(
+      'Kein Spiel für dieses Tab gefunden.\nBitte auf einem Spiel-Tab ausführen (z.B. "2026-06-20 UHC Limmattal").'
+    );
+    return;
+  }
+
+  var allEvents = _sheetData(ss, EVENTS_SHEET);
+  var squad     = _sheetData(ss, SQUAD_SHEET);
+
+  // Filter events for this game and sort by period then timestamp
+  var events = allEvents
+    .filter(function(e) { return e.game_id === gameId; })
+    .sort(function(a, b) {
+      var pd = Number(a.period || 0) - Number(b.period || 0);
+      if (pd !== 0) return pd;
+      return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+    });
+
+  // Build player map
+  var playerMap = {};
+  squad.forEach(function(s) {
+    playerMap[String(s.id)] = { name: s.name, type: s.type };
+  });
+
+  // Remove existing charts and clear aux data area
+  sh.getCharts().forEach(function(c) { sh.removeChart(c); });
+  var lastRow = Math.max(sh.getLastRow(), 60);
+  var lastCol = sh.getLastColumn();
+  if (lastCol >= 26) {
+    sh.getRange(1, 26, lastRow, lastCol - 25).clear();
+  }
+
+  // Write aux data tables starting at col 26
+  var auxCol = 26;
+  var tlMeta  = _writeGameTimeline_(sh, auxCol,      1, events, playerMap);
+  var actMeta = _writePlayerActionsTable_(sh, auxCol + 11, 1, events, playerMap);
+  var typMeta = _writeActionTypeTable_(sh, auxCol + 21, 1, events);
+  var gwMeta  = _writeGoalieBilanzTable_(sh, auxCol + 25, 1, events);
+
+  // Insert charts
+  _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta);
+
+  SpreadsheetApp.getUi().alert('Spiel "' + sheetName + '" analysiert!');
+}
+
+// Timeline: Nr | Jets | Gegner | Paraden | Mega-Parade | Torschuss | Schlüsselpass | Powerplay | Fehler
+// Jets/Gegner = cumulative score at each event (continuous line).
+// Event lanes = fixed Y value only at matching events, blank otherwise (isolated dots).
+function _writeGameTimeline_(sh, col, startRow, events, playerMap) {
+  var headers = ['Nr', 'Jets', 'Gegner', 'Parade', 'Mega-Parade', 'Torschuss', 'Schlüsselpass', 'Powerplay', 'Fehler'];
+  sh.getRange(startRow, col, 1, headers.length)
+    .setValues([headers]).setFontWeight('bold').setBackground('#e8f0fe').setFontSize(8);
+
+  var jets   = 0;
+  var gegner = 0;
+  var nr     = 0;
+  var rows   = [];
+
+  events.forEach(function(e) {
+    var a = e.action || '';
+    // Skip bookkeeping events that add no visual value
+    if (['power_play_end', 'box_start', 'box_end', 'defense', 'recovery'].indexOf(a) !== -1) return;
+
+    nr++;
+    var parade = null, mega = null, shot = null, kp = null, pp = null, err = null;
+
+    if      (a === 'goal')              { jets++;   }
+    else if (a === 'gegengoal')         { gegner++; }
+    else if (a === 'save')              { parade = -1;   }
+    else if (a === 'mega_save')         { mega   = -1.5; }
+    else if (a === 'slot_shot')         { shot   = -2;   }
+    else if (a === 'key_pass')          { kp     = -3;   }
+    else if (a === 'power_play_start')  { pp     = -4;   }
+    else if (a === 'bad_pass' || a === 'bad_throw') { err = -5; }
+
+    rows.push([nr, jets, gegner, parade, mega, shot, kp, pp, err]);
+  });
+
+  if (rows.length > 0) {
+    sh.getRange(startRow + 1, col, rows.length, headers.length)
+      .setValues(rows).setFontSize(8);
+  }
+
+  return { col: col, headerRow: startRow, dataStart: startRow + 1, dataCount: rows.length, colCount: headers.length };
+}
+
+// Player actions: Spieler | Tore | Vorlagen | Paraden | Torschüsse | Schlüsselpässe | Ballgewinne | Fehlpässe
+function _writePlayerActionsTable_(sh, col, startRow, events, playerMap) {
+  var headers = ['Spieler', 'Tore', 'Vorlagen', 'Paraden', 'Torschüsse', 'Schlüsselpässe', 'Ballgewinne', 'Fehlpässe'];
+  sh.getRange(startRow, col, 1, headers.length)
+    .setValues([headers]).setFontWeight('bold').setBackground('#e8f0fe').setFontSize(8);
+
+  var counts = {};
+  var ensure = function(pid) {
+    if (!counts[pid]) counts[pid] = { g: 0, a: 0, sv: 0, sh: 0, kp: 0, rec: 0, bp: 0 };
+  };
+
+  events.forEach(function(e) {
+    var pid = String(e.player_id || '');
+    if (!pid) return;
+    ensure(pid);
+    var a = e.action || '';
+    if      (a === 'goal')                           { counts[pid].g++;  }
+    else if (a === 'save' || a === 'mega_save')      { counts[pid].sv++; }
+    else if (a === 'slot_shot')                      { counts[pid].sh++; }
+    else if (a === 'key_pass')                       { counts[pid].kp++; }
+    else if (a === 'recovery')                       { counts[pid].rec++; }
+    else if (a === 'bad_pass' || a === 'bad_throw')  { counts[pid].bp++; }
+
+    // Assist stored inline on the goal event
+    if (a === 'goal' && e.assist_id) {
+      var apid = String(e.assist_id);
+      ensure(apid);
+      counts[apid].a++;
+    }
+  });
+
+  var rows = [];
+  Object.keys(counts).forEach(function(pid) {
+    var p   = playerMap[pid];
+    var c   = counts[pid];
+    var tot = c.g + c.a + c.sv + c.sh + c.kp + c.rec + c.bp;
+    if (tot === 0) return;
+    rows.push([p ? p.name : ('Spieler ' + pid), c.g, c.a, c.sv, c.sh, c.kp, c.rec, c.bp]);
+  });
+  rows.sort(function(a, b) {
+    return b.slice(1).reduce(function(s, v) { return s + v; }, 0)
+         - a.slice(1).reduce(function(s, v) { return s + v; }, 0);
+  });
+
+  if (rows.length > 0) {
+    sh.getRange(startRow + 1, col, rows.length, headers.length)
+      .setValues(rows).setFontSize(8);
+  }
+
+  return { col: col, headerRow: startRow, dataStart: startRow + 1, dataCount: rows.length, colCount: headers.length };
+}
+
+// Action type counts
+function _writeActionTypeTable_(sh, col, startRow, events) {
+  var headers = ['Aktionstyp', 'Anzahl'];
+  sh.getRange(startRow, col, 1, 2)
+    .setValues([headers]).setFontWeight('bold').setBackground('#e8f0fe').setFontSize(8);
+
+  var labels = {
+    goal: 'Tor', gegengoal: 'Gegentor', save: 'Parade', mega_save: 'Mega-Parade',
+    slot_shot: 'Torschuss', key_pass: 'Schlüsselpass', recovery: 'Ballgewinn',
+    defense: 'Abwehraktion', bad_pass: 'Fehlpass', bad_throw: 'Fehlauswurf',
+    power_play_start: 'Powerplay', box_start: 'Unterzahl',
+  };
+  var typeCounts = {};
+  events.forEach(function(e) {
+    var a = e.action || 'unbekannt';
+    typeCounts[a] = (typeCounts[a] || 0) + 1;
+  });
+
+  var rows = Object.keys(typeCounts)
+    .map(function(k) { return [labels[k] || k, typeCounts[k]]; })
+    .sort(function(a, b) { return b[1] - a[1]; });
+
+  if (rows.length > 0) {
+    sh.getRange(startRow + 1, col, rows.length, 2).setValues(rows).setFontSize(8);
+  }
+
+  return { col: col, headerRow: startRow, dataStart: startRow + 1, dataCount: rows.length, colCount: 2 };
+}
+
+// Goalie bilanz: Paraden / Mega-Paraden / Gegentore
+function _writeGoalieBilanzTable_(sh, col, startRow, events) {
+  var headers = ['Kategorie', 'Anzahl'];
+  sh.getRange(startRow, col, 1, 2)
+    .setValues([headers]).setFontWeight('bold').setBackground('#e8f0fe').setFontSize(8);
+
+  var saves  = events.filter(function(e) { return e.action === 'save'; }).length;
+  var mega   = events.filter(function(e) { return e.action === 'mega_save'; }).length;
+  var ga     = events.filter(function(e) { return e.action === 'gegengoal'; }).length;
+
+  var rows = [['Paraden', saves], ['Mega-Paraden', mega], ['Gegentore', ga]];
+  sh.getRange(startRow + 1, col, rows.length, 2).setValues(rows).setFontSize(8);
+
+  return { col: col, headerRow: startRow, dataStart: startRow + 1, dataCount: rows.length, colCount: 2 };
+}
+
+function _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta) {
+  // Anchor column for all charts (after all data tables with a gap)
+  var chartCol = 44;
+
+  // Chart 1: Score progression + event lanes (LINE chart)
+  // Jets/Gegner as thick lines; event lanes as dot-only series (lineWidth: 0)
+  if (tlMeta.dataCount > 0) {
+    var tlRange = sh.getRange(tlMeta.headerRow, tlMeta.col, tlMeta.dataCount + 1, tlMeta.colCount);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.LINE)
+      .addRange(tlRange)
+      .setOption('title', 'Spielverlauf')
+      .setOption('legend', { position: 'bottom' })
+      .setOption('interpolateNulls', false)
+      .setOption('series', {
+        '0': { lineWidth: 3, pointSize: 5,  color: '#0033a0' },  // Jets score
+        '1': { lineWidth: 3, pointSize: 5,  color: '#cc2200' },  // Gegner score
+        '2': { lineWidth: 0, pointSize: 8,  color: '#22c55e' },  // Paraden
+        '3': { lineWidth: 0, pointSize: 11, color: '#16a34a' },  // Mega-Paraden (bigger)
+        '4': { lineWidth: 0, pointSize: 8,  color: '#ffcd00' },  // Torschüsse
+        '5': { lineWidth: 0, pointSize: 8,  color: '#60a5fa' },  // Schlüsselpässe
+        '6': { lineWidth: 0, pointSize: 8,  color: '#a78bfa' },  // Powerplay
+        '7': { lineWidth: 0, pointSize: 8,  color: '#f87171' },  // Fehler
+      })
+      .setOption('vAxis', { gridlines: { color: '#e5e7eb' }, baselineColor: '#aaa' })
+      .setOption('hAxis', { title: 'Ereignisreihenfolge', textStyle: { fontSize: 9 } })
+      .setOption('width', 680).setOption('height', 380)
+      .setPosition(1, chartCol, 0, 0)
+      .build());
+  }
+
+  // Chart 2: Actions per player (stacked BAR)
+  if (actMeta.dataCount > 0) {
+    var actRange = sh.getRange(actMeta.headerRow, actMeta.col, actMeta.dataCount + 1, actMeta.colCount);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.BAR)
+      .addRange(actRange)
+      .setOption('title', 'Aktionen pro Spieler')
+      .setOption('isStacked', true)
+      .setOption('legend', { position: 'bottom' })
+      .setOption('colors', ['#0033a0', '#ffcd00', '#22c55e', '#60a5fa', '#a78bfa', '#f59e0b', '#f87171'])
+      .setOption('width', 520).setOption('height', Math.max(260, actMeta.dataCount * 28 + 100))
+      .setPosition(23, chartCol, 0, 0)
+      .build());
+  }
+
+  // Chart 3: Action type counts (COLUMN)
+  if (typMeta.dataCount > 0) {
+    var typRange = sh.getRange(typMeta.headerRow, typMeta.col, typMeta.dataCount + 1, 2);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(typRange)
+      .setOption('title', 'Aktionen nach Typ')
+      .setOption('legend', { position: 'none' })
+      .setOption('colors', ['#0033a0'])
+      .setOption('hAxis', { slantedText: true, slantedTextAngle: 40, textStyle: { fontSize: 9 } })
+      .setOption('width', 440).setOption('height', 280)
+      .setPosition(23, chartCol + 9, 0, 0)
+      .build());
+  }
+
+  // Chart 4: Goalie bilanz (PIE / donut)
+  if (gwMeta.dataCount > 0) {
+    var gwRange = sh.getRange(gwMeta.headerRow, gwMeta.col, gwMeta.dataCount + 1, 2);
+    sh.insertChart(sh.newChart()
+      .setChartType(Charts.ChartType.PIE)
+      .addRange(gwRange)
+      .setOption('title', 'Torwart-Bilanz')
+      .setOption('pieHole', 0.4)
+      .setOption('colors', ['#22c55e', '#16a34a', '#f87171'])
+      .setOption('width', 340).setOption('height', 280)
+      .setPosition(42, chartCol, 0, 0)
+      .build());
   }
 }
