@@ -236,6 +236,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     return r;
   });
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
+  const [swQueueSize, setSwQueueSize] = React.useState(0);
   const [confirmLeave, setConfirmLeave] = React.useState(false);
   const [endGame,      setEndGame]      = React.useState(false);
   const lastEventRef = React.useRef(null); // { params, scoreEffect: 'us'|'them'|null }
@@ -274,14 +275,23 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     flushRef.current = flush;
     flush();
 
-    function onFocus() { flushRef.current?.(); }
+    function onFocus()   { flushRef.current?.(); }
     function onVisible() { if (document.visibilityState === 'visible') flushRef.current?.(); }
+    function onSwQueue(e) { setSwQueueSize(e.detail || 0); }
 
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('jets-sw-queue', onSwQueue);
+
+    // Periodic flush every 30 s — catches transient Apps Script timeouts
+    // that aren't real network failures (fallback for non-SW environments)
+    const interval = setInterval(() => { flushRef.current?.(); }, 30_000);
+
     return () => {
+      clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('jets-sw-queue', onSwQueue);
     };
   }, [scriptUrl]);
 
@@ -492,8 +502,8 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
             <ScoreDisplay us={score.us} them={score.them} />
-            {queueSize > 0 && (
-              <IconBtn name="wifi-off" label={`${queueSize} ausstehend`} badge={queueSize}
+            {(queueSize + swQueueSize) > 0 && (
+              <IconBtn name="wifi-off" label={`${queueSize + swQueueSize} ausstehend`} badge={queueSize + swQueueSize}
                 onClick={() => flushRef.current?.()} />
             )}
             <IconBtn name="circle-help" onClick={() => setHelp(true)} label="Hilfe" />
