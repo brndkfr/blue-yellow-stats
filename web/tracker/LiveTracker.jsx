@@ -238,6 +238,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
   const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
   const [confirmLeave, setConfirmLeave] = React.useState(false);
   const [endGame,      setEndGame]      = React.useState(false);
+  const lastEventRef = React.useRef(null); // { params, scoreEffect: 'us'|'them'|null }
 
   // Hide the external scout bar while tracking — scout is shown in the header pill
   React.useEffect(() => {
@@ -258,7 +259,10 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
       const remaining = [];
       for (const params of q) {
         try {
-          await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams(params) });
+          const r = await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams(params) });
+          if (!r.ok) throw new Error('http ' + r.status);
+          const body = await r.json();
+          if (body && body.status === 'error') throw new Error('server error');
         } catch (_) {
           remaining.push(params);
         }
@@ -303,7 +307,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
   }
 
   function postEvent(fields) {
-    if (!scriptUrl) return;
+    if (!scriptUrl) return null;
     const params = {
       game_id:    game.id       || "",
       game_date:  game.date     || "",
@@ -319,23 +323,32 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
       ...fields,
     };
     fetch(scriptUrl, { method: "POST", body: new URLSearchParams(params) })
-      .then(() => { flushRef.current?.(); })
+      .then((r) => {
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+      })
+      .then((body) => {
+        if (body && body.status === 'error') throw new Error(body.message || 'server error');
+        flushRef.current?.();
+      })
       .catch(() => {
         const q = _readQueue();
         q.push({ ...params, was_queued: "yes" });
         _writeQueue(q);
         setQueueSize(q.length);
       });
+    return params;
   }
 
   function sendAction(a) {
-    postEvent({
+    const params = postEvent({
       player_id:   String(active.id  || ""),
       player_nr:   active.nr ? String(active.nr) : "",
       player_name: active.name,
       player_role: isGoalie(active) ? "goalie" : getRole(active),
       action:      a.code,
     });
+    lastEventRef.current = { params, scoreEffect: null };
     const t = { icon: "check", tone: "info", text: `${a.label} — ${active.nr ? "#" + active.nr + " " : ""}${active.name}` };
     setLastEvent(t); fireToast(t); setActive(null);
   }
@@ -353,7 +366,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     finishGoal(`Goal ${scorer}${powerPlay ? " · PP" : ""}`, null);
   }
   function finishGoal(text, assistPlayer) {
-    postEvent({
+    const params = postEvent({
       player_id:   String(assistFor.id  || ""),
       player_nr:   assistFor.nr ? String(assistFor.nr) : "",
       player_name: assistFor.name,
@@ -364,27 +377,42 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
       assist_name: assistPlayer ? assistPlayer.name : "",
       power_play:  powerPlay ? "yes" : "",
     });
+    lastEventRef.current = { params, scoreEffect: 'us' };
     setScore((s) => ({ ...s, us: s.us + 1 }));
     const t = { icon: "goal", tone: "success", text };
     setLastEvent(t); fireToast(t);
     setAssistFor(null); setPowerPlay(false);
   }
   function pickReason(r) {
-    postEvent({
+    const params = postEvent({
       player_id:   "",
       player_nr:   "",
       player_name: "",
       action:      "gegengoal",
       reason:      r ? r.code : "",
     });
+    lastEventRef.current = { params, scoreEffect: 'them' };
     setScore((s) => ({ ...s, them: s.them + 1 }));
     const t = { icon: "shield-off", tone: "pending", text: `Gegengoal${r ? ` · ${r.label}` : ""}` };
     setLastEvent(t); fireToast(t); setGegengoal(false);
   }
   function undo() {
-    if (!lastEvent) return;
-    fireToast({ icon: "undo-2", tone: "info", text: "Korrektur gesendet" });
+    if (!lastEvent || !lastEventRef.current) return;
+    const { params, scoreEffect } = lastEventRef.current;
+    if (scoreEffect === 'us')   setScore((s) => ({ ...s, us:   Math.max(0, s.us   - 1) }));
+    if (scoreEffect === 'them') setScore((s) => ({ ...s, them: Math.max(0, s.them - 1) }));
+    if (scriptUrl && params) {
+      fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
+        action_type: 'deleteEvent',
+        game_id:     params.game_id    || '',
+        player_id:   params.player_id  || '',
+        action:      params.action     || '',
+        timestamp:   params.timestamp  || '',
+      }) }).catch(() => {});
+    }
+    fireToast({ icon: "undo-2", tone: "info", text: "Letzter Eintrag gelöscht" });
     setLastEvent(null);
+    lastEventRef.current = null;
   }
 
   function resolveBoxPlay(type) {
@@ -394,10 +422,13 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
       scored:   { icon: "zap",          tone: "success", text: "Überzahltreffer!" },
       expired:  { icon: "clock",        tone: "info",    text: "Powerplay vorbei" },
     }[type];
-    postEvent({ action: type === "killed" ? "box_killed" : type === "conceded" ? "box_conceded" : type === "scored" ? "pp_scored" : "pp_expired" });
+    const actionCode = type === "killed" ? "box_killed" : type === "conceded" ? "box_conceded" : type === "scored" ? "pp_scored" : "pp_expired";
+    const params = postEvent({ action: actionCode });
+    const scoreEffect = type === "conceded" ? 'them' : type === "scored" ? 'us' : null;
+    lastEventRef.current = { params, scoreEffect };
     if (type === "conceded") setScore((s) => ({ ...s, them: s.them + 1 }));
     if (type === "scored")   setScore((s) => ({ ...s, us: s.us + 1 }));
-    if (msgs) fireToast(msgs);
+    if (msgs) { setLastEvent(msgs); fireToast(msgs); }
     setBoxPlay(null);
   }
 

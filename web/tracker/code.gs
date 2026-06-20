@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v15';
+const VERSION           = 'v16';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -242,6 +242,7 @@ function doPost(e) {
     case 'saveGame':       return _handleSaveGame(ss, p);
     case 'saveGameRoster': return _handleSaveGameRoster(ss, p);
     case 'saveSquadPlayer':return _handleSaveSquadPlayer(ss, p);
+    case 'deleteEvent':    return _handleDeleteEvent(ss, p);
     default:               return _handleEvent(ss, p);
   }
 }
@@ -327,6 +328,35 @@ function _handleSaveGameRoster(ss, p) {
   }
 
   return _json({ status: 'ok' });
+}
+
+/** Delete the most recent event row matching game_id + player_id + action. */
+function _handleDeleteEvent(ss, p) {
+  const sheet = ss.getSheetByName(EVENTS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return _json({ status: 'ok' });
+
+  const gameId   = String(p.game_id   || '');
+  const playerId = String(p.player_id || '');
+  const action   = String(p.action    || '');
+  if (!gameId || !action) return _json({ status: 'ok' });
+
+  const headers  = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const gidIdx   = headers.indexOf('game_id');
+  const pidIdx   = headers.indexOf('player_id');
+  const actIdx   = headers.indexOf('action');
+  const lastRow  = sheet.getLastRow();
+  const vals     = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+  // Search from bottom (most recent) so we delete the event just logged
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][gidIdx]) === gameId &&
+        String(vals[i][actIdx]) === action &&
+        (playerId === '' || String(vals[i][pidIdx]) === playerId)) {
+      sheet.deleteRow(i + 2);
+      return _json({ status: 'ok' });
+    }
+  }
+  return _json({ status: 'ok' }); // not found — already gone, treat as success
 }
 
 function _handleSaveSquadPlayer(ss, p) {
