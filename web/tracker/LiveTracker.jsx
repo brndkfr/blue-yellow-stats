@@ -127,13 +127,13 @@ function SheetSurface({ children, style }) {
   );
 }
 
-function LTBoxPlayPanel({ mode, seconds, onResolve }) {
+function LTBoxPlayPanel({ mode, remaining, onResolve }) {
   const isBox  = mode === "box";
-  const mins   = Math.floor(seconds / 60);
-  const secs   = seconds % 60;
+  const mins   = Math.floor(remaining / 60);
+  const secs   = remaining % 60;
   const tStr   = `${mins}:${secs.toString().padStart(2, "0")}`;
-  const pct    = (seconds / 120) * 100;
-  const urgent = seconds <= 30;
+  const pct    = (remaining / 120) * 100;
+  const urgent = remaining <= 30;
   const accent = isBox ? "#f87171" : "#ffcd00";
   return (
     <div style={{ background: isBox ? "rgba(220,38,38,.1)" : "rgba(255,205,0,.08)", border: `1px solid ${isBox ? "rgba(239,68,68,.3)" : "rgba(255,205,0,.25)"}`, borderRadius: "var(--radius-xl)", padding: "0.75rem 0.875rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -219,6 +219,8 @@ function LiveTracker({
     game.id ? ('jets_score_' + game.id) : ('jets_score_adhoc_' + Date.now())
   ).current;
 
+  const minutesPerPeriod = game.minutes_per_period || 20;
+
   const [period,      setPeriod]      = React.useState(1);
   const [format,      setFormat]      = React.useState(game.format || 2);
   const [active,      setActive]      = React.useState(null);
@@ -235,15 +237,56 @@ function LiveTracker({
     } catch (_) {}
     return { us: 0, them: 0 };
   });
-  const [boxPlay,     setBoxPlay]     = React.useState(null); // null | { mode:"box"|"power", seconds:120 }
+  const [boxPlay,     setBoxPlay]     = React.useState(null); // null | { mode:"box"|"power", startedAt, totalSecs }
   const [playerRoles, setPlayerRoles] = React.useState(() => {
     const r = {};
     players.forEach((p) => { r[p.id] = (initialRoles && initialRoles[p.id]) || p.role || "center"; });
     return r;
   });
-  const [confirmLeave, setConfirmLeave] = React.useState(false);
-  const [endGame,      setEndGame]      = React.useState(false);
+  const [confirmLeave,  setConfirmLeave]  = React.useState(false);
+  const [endGame,       setEndGame]       = React.useState(false);
+  const [confirmPeriod, setConfirmPeriod] = React.useState(false);
+  const [periodPending, setPeriodPending] = React.useState(null);
   const lastEventRef = React.useRef(null); // { params, scoreEffect: 'us'|'them'|null }
+
+  // Timer state — restored from localStorage on mount
+  const [timerBaseSecs,  setTimerBaseSecs]  = React.useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey + '_timer'));
+      if (s && typeof s.timerBaseSecs === 'number') return s.timerBaseSecs;
+    } catch (_) {}
+    return minutesPerPeriod * 60;
+  });
+  const [timerStartedAt, setTimerStartedAt] = React.useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey + '_timer'));
+      if (s && s.timerRunning && typeof s.timerStartedAt === 'number') return s.timerStartedAt;
+    } catch (_) {}
+    return null;
+  });
+  const [timerRunning,   setTimerRunning]   = React.useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey + '_timer'));
+      return !!(s && s.timerRunning);
+    } catch (_) {}
+    return false;
+  });
+
+  // Tick counter — bumped every 500ms to drive re-renders while timers run
+  const [tick, setTick] = React.useState(0);
+
+  // Derived countdown values — recomputed from Date.now() each render (iOS-safe)
+  const timerRemaining = timerRunning
+    ? Math.max(0, timerBaseSecs - Math.floor((Date.now() - timerStartedAt) / 1000))
+    : timerBaseSecs;
+  const timerIsUrgent = timerRemaining > 0 && timerRemaining <= 180;
+  const timerPulse    = timerIsUrgent && tick % 2 === 0;
+
+  const boxPlayRemaining = boxPlay
+    ? Math.max(0, boxPlay.totalSecs - Math.floor((Date.now() - boxPlay.startedAt) / 1000))
+    : 0;
+
+  const toastTimer = React.useRef(null);
 
   // Hide the external scout bar while tracking — scout is shown in the header pill
   React.useEffect(() => {
@@ -257,22 +300,67 @@ function LiveTracker({
     try { localStorage.setItem(sessionKey, JSON.stringify(score)); } catch (_) {}
   }, [score, sessionKey]);
 
-  const toastTimer = React.useRef(null);
-
+  // Persist timer state so an accidental reload restores it
   React.useEffect(() => {
-    if (!boxPlay) return;
-    if (boxPlay.seconds <= 0) {
-      fireToast({ icon: "clock", tone: "info", text: "Strafe abgelaufen" });
-      setBoxPlay(null); return;
-    }
-    const t = setTimeout(() => setBoxPlay((p) => p ? { ...p, seconds: p.seconds - 1 } : null), 1000);
-    return () => clearTimeout(t);
-  }, [boxPlay]);
+    try {
+      localStorage.setItem(sessionKey + '_timer', JSON.stringify({
+        timerBaseSecs, timerStartedAt, timerRunning,
+      }));
+    } catch (_) {}
+  }, [timerBaseSecs, timerStartedAt, timerRunning]);
+
+  // Tick interval — only runs while a countdown is active
+  React.useEffect(() => {
+    if (!timerRunning && !boxPlay) return;
+    const id = setInterval(() => setTick((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, [timerRunning, !!boxPlay]);
+
+  // BoxPlay expiry
+  React.useEffect(() => {
+    if (!boxPlay || boxPlayRemaining > 0) return;
+    fireToast({ icon: "clock", tone: "info", text: "Strafe abgelaufen" });
+    setBoxPlay(null);
+  }, [boxPlayRemaining, !!boxPlay]);
+
+  // Timer expiry
+  React.useEffect(() => {
+    if (!timerRunning || timerRemaining > 0) return;
+    setTimerRunning(false);
+    setTimerStartedAt(null);
+    try { navigator.vibrate?.([200, 100, 200]); } catch (_) {}
+    fireToast({ icon: "flag", tone: "pending", text: "Zeit abgelaufen!" });
+  }, [timerRemaining, timerRunning]);
 
   const isGoalie    = (p) => goalies.some((g) => g.id === p?.id);
   const getRole     = (p) => playerRoles[p?.id] || "center";
   const setRole     = (id, role) => setPlayerRoles((prev) => ({ ...prev, [id]: role }));
-  const toggleFormat = () => { setPeriod(1); setFormat((f) => f === 2 ? 3 : 2); };
+
+  function resetTimerForPeriod() {
+    setTimerBaseSecs(minutesPerPeriod * 60);
+    setTimerStartedAt(null);
+    setTimerRunning(false);
+  }
+  function startTimer() {
+    setTimerStartedAt(Date.now());
+    setTimerRunning(true);
+  }
+  function pauseTimer() {
+    setTimerBaseSecs(timerRemaining);
+    setTimerStartedAt(null);
+    setTimerRunning(false);
+  }
+  function handlePeriodChange(p) {
+    if (timerRunning && p !== period) {
+      setPeriodPending(p);
+      setConfirmPeriod(true);
+    } else {
+      setPeriod(p);
+      resetTimerForPeriod();
+    }
+  }
+
+  const toggleFormat = () => { setPeriod(1); setFormat((f) => f === 2 ? 3 : 2); resetTimerForPeriod(); };
 
   function fireToast(t) {
     setToast(t);
@@ -461,8 +549,8 @@ function LiveTracker({
           </div>
         </div>
 
-        {/* Row 2: period tabs + undo */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        {/* Row 2: format toggle + timer + period tabs + undo */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
           {/* Format toggle */}
           <button onClick={toggleFormat} style={{
             flexShrink: 0, appearance: "none", cursor: "pointer",
@@ -473,8 +561,30 @@ function LiveTracker({
             fontSize: "0.6875rem", fontWeight: 700, lineHeight: 1,
             letterSpacing: "0.04em", touchAction: "manipulation",
           }}>{format === 2 ? "2×H" : "3×D"}</button>
+
+          {/* Timer pill — tap to start/pause; red + pulsing in last 3 min */}
+          <button onClick={timerRunning ? pauseTimer : startTimer} style={{
+            flexShrink: 0, appearance: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "0.3rem",
+            padding: "0.35rem 0.5rem",
+            borderRadius: "var(--radius-md)",
+            background: timerIsUrgent ? "rgba(220,38,38,.2)" : "rgba(255,255,255,.06)",
+            border: timerIsUrgent ? "1px solid rgba(239,68,68,.4)" : "1px solid rgba(255,255,255,.1)",
+            touchAction: "manipulation",
+          }}>
+            <span style={{
+              fontVariantNumeric: "tabular-nums", fontWeight: 800,
+              fontSize: "0.8125rem", lineHeight: 1,
+              color: timerIsUrgent ? (timerPulse ? "#fca5a5" : "#f87171") : "rgba(255,255,255,.8)",
+            }}>
+              {String(Math.floor(timerRemaining / 60)).padStart(2, "0")}:{String(timerRemaining % 60).padStart(2, "0")}
+            </span>
+            <Icon name={timerRunning ? "pause" : "play"} size={11}
+              color={timerIsUrgent ? "#f87171" : "rgba(255,255,255,.4)"} strokeWidth={2.5} />
+          </button>
+
           <div style={{ flex: 1, minWidth: 0 }}>
-            <PeriodTabs format={format} active={period} onChange={setPeriod} />
+            <PeriodTabs format={format} active={period} onChange={handlePeriodChange} />
           </div>
           <Button variant="secondary" size="sm" icon="undo-2"
             disabled={!lastEvent} onClick={undo}>Undo</Button>
@@ -495,7 +605,7 @@ function LiveTracker({
         display: "flex", flexDirection: "column", gap: "1.25rem",
       }}>
         {boxPlay && (
-          <LTBoxPlayPanel mode={boxPlay.mode} seconds={boxPlay.seconds} onResolve={resolveBoxPlay} />
+          <LTBoxPlayPanel mode={boxPlay.mode} remaining={boxPlayRemaining} onResolve={resolveBoxPlay} />
         )}
         <section style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           <SectionLabel count={goalies.length}>Goalie</SectionLabel>
@@ -581,7 +691,7 @@ function LiveTracker({
         </Button>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
           <button
-            onClick={() => boxPlay ? null : setBoxPlay({ mode: "box", seconds: 120 })}
+            onClick={() => boxPlay ? null : setBoxPlay({ mode: "box", startedAt: Date.now(), totalSecs: 120 })}
             style={{
               appearance: "none", cursor: boxPlay?.mode === "box" ? "default" : "pointer",
               minHeight: "2.75rem", borderRadius: "var(--radius-lg)",
@@ -597,7 +707,7 @@ function LiveTracker({
             BoxPlay
           </button>
           <button
-            onClick={() => boxPlay ? null : setBoxPlay({ mode: "power", seconds: 120 })}
+            onClick={() => boxPlay ? null : setBoxPlay({ mode: "power", startedAt: Date.now(), totalSecs: 120 })}
             style={{
               appearance: "none", cursor: boxPlay?.mode === "power" ? "default" : "pointer",
               minHeight: "2.75rem", borderRadius: "var(--radius-lg)",
@@ -833,7 +943,13 @@ function LiveTracker({
                 Abbrechen
               </Button>
               <Button variant="primary" size="md" fullWidth icon="check"
-                onClick={() => onEndGame({ us: score.us, them: score.them })}>
+                onClick={() => {
+                  try {
+                    localStorage.removeItem(sessionKey);
+                    localStorage.removeItem(sessionKey + '_timer');
+                  } catch (_) {}
+                  onEndGame({ us: score.us, them: score.them });
+                }}>
                 Speichern &amp; beenden
               </Button>
             </div>
@@ -862,6 +978,40 @@ function LiveTracker({
               </Button>
               <Button variant="danger" size="md" fullWidth onClick={onBack}>
                 Verlassen
+              </Button>
+            </div>
+          </SheetSurface>
+        </Scrim>
+      )}
+
+      {/* ── Confirm period change (timer running) ── */}
+      {confirmPeriod && (
+        <Scrim onClose={() => { setConfirmPeriod(false); setPeriodPending(null); }}>
+          <SheetSurface>
+            <Grabber />
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              fontWeight: 700, fontSize: "0.9375rem", marginBottom: "0.5rem",
+            }}>
+              <Icon name="timer-reset" size={17} color="rgba(255,255,255,.6)" />
+              Timer zurücksetzen?
+            </div>
+            <p style={{ margin: "0 0 1rem", fontSize: "0.8125rem", color: "rgba(255,255,255,.4)" }}>
+              Der Timer läuft noch. Periode wechseln setzt ihn auf {minutesPerPeriod}:00 zurück.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <Button variant="secondary" size="md" fullWidth
+                onClick={() => { setConfirmPeriod(false); setPeriodPending(null); }}>
+                Abbrechen
+              </Button>
+              <Button variant="primary" size="md" fullWidth
+                onClick={() => {
+                  setPeriod(periodPending);
+                  resetTimerForPeriod();
+                  setConfirmPeriod(false);
+                  setPeriodPending(null);
+                }}>
+                Wechseln &amp; zurücksetzen
               </Button>
             </div>
           </SheetSurface>
