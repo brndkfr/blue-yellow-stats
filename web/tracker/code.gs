@@ -20,13 +20,18 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v16';
+const VERSION           = 'v24';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
 const SQUAD_SHEET       = 'Squad';
 const GAME_ROSTER_SHEET = 'GameRoster';
 const SCOUTS_SHEET      = 'Scouts';
+
+// Bump these keys whenever new migrations are added so the skip-flag resets.
+const _EV_MIG_KEY = 'ev_mig_v4';
+const _GM_MIG_KEY = 'gm_mig_v2';
+const _CACHE_TTL  = 3600; // seconds
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -122,79 +127,92 @@ function _upsertRow(sheet, keyCol, keyVal, newRow) {
   return -1;
 }
 
-/** Add player_id and assist columns if the Events sheet predates those columns. */
-function _migrateEventsHeader(sheet) {
-  if (sheet.getLastRow() === 0) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+/** Run all Events column migrations in one header read. Returns current headers array. */
+function _migrateEventsAll(sheet) {
+  if (sheet.getLastRow() === 0) return [];
+  var h = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-  // Insert player_id after timestamp
-  if (!headers.includes('player_id')) {
-    const tsIdx = headers.indexOf('timestamp');
-    if (tsIdx !== -1) {
-      sheet.insertColumnAfter(tsIdx + 1);
-      sheet.getRange(1, tsIdx + 2).setValue('player_id');
-      headers.splice(tsIdx + 1, 0, 'player_id');
+  // v1: player_id after timestamp
+  if (h.indexOf('player_id') === -1) {
+    var ti = h.indexOf('timestamp');
+    if (ti !== -1) {
+      sheet.insertColumnAfter(ti + 1);
+      sheet.getRange(1, ti + 2).setValue('player_id');
+      h.splice(ti + 1, 0, 'player_id');
     }
   }
-
-  // Insert assist_id, assist_nr, assist_name, power_play, reason after action
-  if (!headers.includes('assist_id')) {
-    const actionIdx = headers.indexOf('action');
-    if (actionIdx !== -1) {
-      const newCols = ['assist_id', 'assist_nr', 'assist_name', 'power_play', 'reason'];
-      newCols.forEach((col, i) => {
-        sheet.insertColumnAfter(actionIdx + 1 + i);
-        sheet.getRange(1, actionIdx + 2 + i).setValue(col);
+  // v1: assist block after action
+  if (h.indexOf('assist_id') === -1) {
+    var ai = h.indexOf('action');
+    if (ai !== -1) {
+      ['assist_id', 'assist_nr', 'assist_name', 'power_play', 'reason'].forEach(function(col, i) {
+        sheet.insertColumnAfter(ai + 1 + i);
+        sheet.getRange(1, ai + 2 + i).setValue(col);
+        h.splice(ai + 1 + i, 0, col);
       });
     }
   }
-}
-
-/** Insert player_role after player_name if the Events sheet predates that column. */
-function _migrateEventsHeaderV2(sheet) {
-  if (sheet.getLastRow() === 0) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  if (!headers.includes('player_role')) {
-    const nameIdx = headers.indexOf('player_name');
-    if (nameIdx !== -1) {
-      sheet.insertColumnAfter(nameIdx + 1);
-      sheet.getRange(1, nameIdx + 2).setValue('player_role');
+  // v2: player_role after player_name
+  if (h.indexOf('player_role') === -1) {
+    var ni = h.indexOf('player_name');
+    if (ni !== -1) {
+      sheet.insertColumnAfter(ni + 1);
+      sheet.getRange(1, ni + 2).setValue('player_role');
+      h.splice(ni + 1, 0, 'player_role');
     }
   }
+  // Always: force player_id / assist_id to plain-text to prevent date-serial interpretation
+  ['player_id', 'assist_id'].forEach(function(col) {
+    var idx = h.indexOf(col);
+    if (idx !== -1) sheet.getRange(1, idx + 1, sheet.getMaxRows(), 1).setNumberFormat('@');
+  });
+
+  return h;
 }
 
-/** Insert display_name as column B if the Games sheet predates that column. */
-function _migrateGamesHeader(sheet) {
+/** Run all Games column migrations in one header read. */
+function _migrateGamesAll(sheet) {
   if (sheet.getLastRow() === 0) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  if (!headers.includes('display_name')) {
+  var h = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // v1: display_name as column B
+  if (h.indexOf('display_name') === -1) {
     sheet.insertColumnAfter(1);
     sheet.getRange(1, 2).setValue('display_name');
+    h.splice(1, 0, 'display_name');
   }
-}
-
-/** Insert format, minutes_per_period, team between home and result if missing. */
-function _migrateGamesHeaderV2(sheet) {
-  if (sheet.getLastRow() === 0) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  if (!headers.includes('format')) {
-    const homeIdx = headers.indexOf('home');
-    if (homeIdx !== -1) {
-      const newCols = ['format', 'minutes_per_period', 'team'];
-      newCols.forEach((col, i) => {
-        sheet.insertColumnAfter(homeIdx + 1 + i);
-        sheet.getRange(1, homeIdx + 2 + i).setValue(col);
+  // v2: format + minutes_per_period + team between home and result
+  if (h.indexOf('format') === -1) {
+    var hi = h.indexOf('home');
+    if (hi !== -1) {
+      ['format', 'minutes_per_period', 'team'].forEach(function(col, i) {
+        sheet.insertColumnAfter(hi + 1 + i);
+        sheet.getRange(1, hi + 2 + i).setValue(col);
       });
     }
   }
 }
 
-/** Upsert the Games sheet and create a per-game QUERY sheet if new. */
-function _upsertGame(ss, p) {
+/** Upsert the Games sheet and create a per-game QUERY sheet if new.
+ *  forceUpdate=true bypasses the ScriptCache check (used by saveGame action). */
+function _upsertGame(ss, p, props, forceUpdate) {
+  var gid = p.game_id || '';
+  if (!gid) return;
+
+  // Fast path: if we already know this game exists, skip the sheet read entirely.
+  // saveGame always forces an update so changes to venue/result etc. are written.
+  var cache    = CacheService.getScriptCache();
+  var cacheKey = 'gm_' + gid.replace(/[^a-zA-Z0-9]/g, '_');
+  if (!forceUpdate && cache.get(cacheKey) === '1') return;
+
   const sheet = _getOrCreate(ss, GAMES_SHEET);
   _ensureGamesHeader(sheet);
-  _migrateGamesHeader(sheet);
-  _migrateGamesHeaderV2(sheet);
+
+  if (!props) props = PropertiesService.getScriptProperties();
+  if (props.getProperty(_GM_MIG_KEY) !== '1') {
+    _migrateGamesAll(sheet);
+    props.setProperty(_GM_MIG_KEY, '1');
+  }
 
   const row = [
     p.game_id            || '',
@@ -211,11 +229,10 @@ function _upsertGame(ss, p) {
     p.result             || '',
   ];
 
-  const isNew = _upsertRow(sheet, 'game_id', p.game_id, row) === -1;
+  const isNew = _upsertRow(sheet, 'game_id', gid, row) === -1;
+  if (isNew && gid) _createGameQuerySheet(ss, gid, p.display_name || gid);
 
-  if (isNew && p.game_id) {
-    _createGameQuerySheet(ss, p.game_id, p.display_name || p.game_id);
-  }
+  cache.put(cacheKey, '1', _CACHE_TTL);
 }
 
 /** Create a per-game sheet with a QUERY formula against the Events sheet. */
@@ -225,7 +242,7 @@ function _createGameQuerySheet(ss, gameId, displayName) {
   const qs = ss.insertSheet(sheetName);
   // QUERY pulls all Events rows where column A (game_id) matches
   qs.getRange('A1').setFormula(
-    `=QUERY(${EVENTS_SHEET}!A:W,"SELECT * WHERE A='${gameId}'",1)`
+    '=QUERY(' + EVENTS_SHEET + '!A:Z,"SELECT * WHERE A=\'' + gameId + '\'",1)'
   );
 }
 
@@ -234,33 +251,37 @@ function _createGameQuerySheet(ss, gameId, displayName) {
 // ---------------------------------------------------------------------------
 
 function doPost(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const p  = e.parameter;
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const p     = e.parameter;
+  const props = PropertiesService.getScriptProperties(); // one call for all handlers
 
-  // Route to the correct handler based on action type
   switch (p.action_type) {
-    case 'saveGame':       return _handleSaveGame(ss, p);
+    case 'saveGame':       return _handleSaveGame(ss, p, props);
     case 'saveGameRoster': return _handleSaveGameRoster(ss, p);
     case 'saveSquadPlayer':return _handleSaveSquadPlayer(ss, p);
     case 'deleteEvent':    return _handleDeleteEvent(ss, p);
-    default:               return _handleEvent(ss, p);
+    default:               return _handleEvent(ss, p, props);
   }
 }
 
-/** Write an event row using the actual header order, immune to migration drift. */
-function _appendEventRow(sheet, data) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const row = headers.map((h) => (h in data ? data[h] : ''));
-  sheet.appendRow(row);
-}
-
-function _handleEvent(ss, p) {
+function _handleEvent(ss, p, props) {
   const evSh = _getOrCreate(ss, EVENTS_SHEET);
   _ensureEventsHeader(evSh);
-  _migrateEventsHeader(evSh);
-  _migrateEventsHeaderV2(evSh);
 
-  _appendEventRow(evSh, {
+  // Run migrations once; after that, skip on every subsequent request.
+  var headers;
+  if (props.getProperty(_EV_MIG_KEY) !== '1') {
+    headers = _migrateEventsAll(evSh);
+    if (headers.indexOf('player_id') !== -1 &&
+        headers.indexOf('assist_id')  !== -1 &&
+        headers.indexOf('player_role') !== -1) {
+      props.setProperty(_EV_MIG_KEY, '1');
+    }
+  } else {
+    headers = evSh.getRange(1, 1, 1, evSh.getLastColumn()).getValues()[0];
+  }
+
+  const data = {
     game_id:     p.game_id       || '',
     game_date:   p.game_date     || '',
     game_start:  p.game_start    || '',
@@ -268,30 +289,31 @@ function _handleEvent(ss, p) {
     type:        p.type          || '',
     venue:       p.venue         || '',
     home:        p.home          || '',
-    period:      Number(p.period)     || 0,
-    timestamp:   p.timestamp     || '',
-    player_id:   Number(p.player_id)  || '',
-    player_nr:   Number(p.player_nr)  || 0,
-    player_name: p.player_name   || '',
-    player_role: p.player_role   || '',
-    action:      p.action        || '',
-    assist_id:   Number(p.assist_id)  || '',
-    assist_nr:   Number(p.assist_nr)  || '',
-    assist_name: p.assist_name   || '',
-    power_play:  p.power_play    || '',
-    reason:      p.reason        || '',
-    scout:       p.scout         || '',
-    note:        p.note          || '',
-    was_queued:  p.was_queued    || '',
+    period:      Number(p.period)    || 0,
+    timestamp:   p.timestamp    || '',
+    player_id:   p.player_id    || '',
+    player_nr:   Number(p.player_nr) || 0,
+    player_name: p.player_name  || '',
+    player_role: p.player_role  || '',
+    action:      p.action       || '',
+    assist_id:   p.assist_id    || '',
+    assist_nr:   Number(p.assist_nr) || '',
+    assist_name: p.assist_name  || '',
+    power_play:  p.power_play   || '',
+    reason:      p.reason       || '',
+    scout:       p.scout        || '',
+    note:        p.note         || '',
+    was_queued:  p.was_queued   || '',
     received_at: new Date(),
-  });
+  };
+  evSh.appendRow(headers.map(function(h) { return h in data ? data[h] : ''; }));
 
-  _upsertGame(ss, p);
+  _upsertGame(ss, p, props, false);
   return _json({ status: 'ok' });
 }
 
-function _handleSaveGame(ss, p) {
-  _upsertGame(ss, p);
+function _handleSaveGame(ss, p, props) {
+  _upsertGame(ss, p, props, true); // forceUpdate: always write saveGame requests
   return _json({ status: 'ok' });
 }
 
@@ -476,6 +498,112 @@ const SEED_SQUAD = [
 
 const SEED_SCOUTS = ['Roland', 'Bernd', 'Marvin', 'Daniel', 'Thomas'];
 
+// ---------------------------------------------------------------------------
+// fixEventsPlayerIds — run ONCE from Apps Script editor (Run menu)
+// Converts date-serialised player_id / assist_id cells back to plain integers
+// and sets both columns to plain-text format so it never happens again.
+// ---------------------------------------------------------------------------
+
+function fixEventsPlayerIds() {
+  var ss     = SpreadsheetApp.getActiveSpreadsheet();
+  var evSh   = ss.getSheetByName(EVENTS_SHEET);
+  var sqSh   = ss.getSheetByName(SQUAD_SHEET);
+  if (!evSh || evSh.getLastRow() < 2) {
+    SpreadsheetApp.getUi().alert('Events sheet is empty — nothing to fix.');
+    return;
+  }
+
+  // Build name -> id map from Squad (source of truth)
+  var nameToId = {};
+  if (sqSh && sqSh.getLastRow() > 1) {
+    var sqHeaders = sqSh.getRange(1, 1, 1, sqSh.getLastColumn()).getValues()[0];
+    var sqIdIdx   = sqHeaders.indexOf('id');
+    var sqNameIdx = sqHeaders.indexOf('name');
+    var sqVals    = sqSh.getRange(2, 1, sqSh.getLastRow() - 1, sqSh.getLastColumn()).getValues();
+    sqVals.forEach(function(row) {
+      var id   = row[sqIdIdx];
+      var name = String(row[sqNameIdx] || '').trim();
+      if (name && id !== '') nameToId[name] = String(id);
+    });
+  }
+
+  var numPlayers = Object.keys(nameToId).length;
+  Logger.log('Squad name->id map: ' + numPlayers + ' entries');
+
+  var evHeaders  = evSh.getRange(1, 1, 1, evSh.getLastColumn()).getValues()[0];
+  var pidIdx     = evHeaders.indexOf('player_id');
+  var pnameIdx   = evHeaders.indexOf('player_name');
+  var aidIdx     = evHeaders.indexOf('assist_id');
+  var anameIdx   = evHeaders.indexOf('assist_name');
+
+  if (pidIdx === -1) {
+    SpreadsheetApp.getUi().alert('player_id column not found.');
+    return;
+  }
+
+  var numRows = evSh.getLastRow() - 1;
+  var allVals = evSh.getRange(2, 1, numRows, evSh.getLastColumn()).getValues();
+
+  // Rebuild player_id from player_name, assist_id from assist_name
+  var pidFixed = 0;
+  var aidFixed = 0;
+
+  var newPidVals  = [];
+  var newAidVals  = [];
+
+  allVals.forEach(function(row) {
+    var pname = pnameIdx !== -1 ? String(row[pnameIdx] || '').trim() : '';
+    var aname = anameIdx !== -1 ? String(row[anameIdx] || '').trim() : '';
+
+    var correctPid = nameToId[pname] || '';
+    var correctAid = nameToId[aname] || '';
+
+    var curPid = row[pidIdx];
+    // Detect bad value: Date object, or string containing '/' or ':' or looks like a year
+    var pidBad = curPid instanceof Date ||
+                 (typeof curPid === 'string' && /[\/:.]/.test(curPid) && curPid.length > 4) ||
+                 (typeof curPid === 'number' && curPid > 31);
+    // Also consider it bad if it doesn't match the correct value
+    if (pidBad || (correctPid && String(curPid) !== correctPid)) { pidFixed++; }
+    newPidVals.push([correctPid]);
+
+    if (aidIdx !== -1) {
+      var curAid = row[aidIdx];
+      var aidBad = curAid instanceof Date ||
+                   (typeof curAid === 'string' && /[\/:.]/.test(curAid) && curAid.length > 4) ||
+                   (typeof curAid === 'number' && curAid > 31);
+      if (aidBad || (correctAid && String(curAid) !== correctAid)) { aidFixed++; }
+      newAidVals.push([correctAid]);
+    }
+  });
+
+  // Step 1: set format to plain text
+  var pidRange = evSh.getRange(2, pidIdx + 1, numRows, 1);
+  pidRange.setNumberFormat('@');
+  if (aidIdx !== -1) {
+    evSh.getRange(2, aidIdx + 1, numRows, 1).setNumberFormat('@');
+  }
+  SpreadsheetApp.flush();
+
+  // Step 2: clear existing content (removes stored Date objects / bad strings)
+  pidRange.clearContent();
+  if (aidIdx !== -1) evSh.getRange(2, aidIdx + 1, numRows, 1).clearContent();
+  SpreadsheetApp.flush();
+
+  // Step 3: write corrected string values
+  pidRange.setValues(newPidVals);
+  if (aidIdx !== -1 && newAidVals.length > 0) {
+    evSh.getRange(2, aidIdx + 1, numRows, 1).setValues(newAidVals);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    'Done! Used Squad name lookup to rebuild IDs.\n' +
+    'player_id: ' + pidFixed + ' cells updated.\n' +
+    'assist_id: ' + aidFixed + ' cells updated.\n\n' +
+    'Squad had ' + numPlayers + ' players in the name map.'
+  );
+}
+
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -550,9 +678,25 @@ function computeStats_(typeFilter) {
   const games   = _sheetData(ss, GAMES_SHEET);
   const rosters = _sheetData(ss, GAME_ROSTER_SHEET);
 
-  const filteredGames   = typeFilter ? games.filter(function(g) { return g.type === typeFilter; }) : games;
+  // Exclude games that haven't happened yet
+  var _cutoff = new Date(); _cutoff.setHours(23, 59, 59, 999);
+  const filteredGames = (typeFilter
+    ? games.filter(function(g) { return g.type === typeFilter; })
+    : games
+  ).filter(function(g) { return _parseGameDate(String(g.date)) <= _cutoff; });
+
   const filteredGameIds = new Set(filteredGames.map(function(g) { return String(g.game_id); }));
-  const filteredEvents  = events.filter(function(e) { return filteredGameIds.has(String(e.game_id)); });
+
+  // Deduplicate events: same (game_id + timestamp + player_id + action) = same queued retry
+  var _seen = Object.create(null);
+  const filteredEvents = events.filter(function(e) {
+    if (!filteredGameIds.has(String(e.game_id))) return false;
+    var key = e.game_id + '|' + e.timestamp + '|' + e.player_id + '|' + e.action;
+    if (_seen[key]) return false;
+    _seen[key] = true;
+    return true;
+  });
+
   const filteredRosters = rosters.filter(function(r) { return filteredGameIds.has(String(r.game_id)); });
 
   var sh = ss.getSheetByName(STATS_SHEET);
@@ -665,7 +809,7 @@ function computeStats_(typeFilter) {
   var s5 = _writeStatsSection(sh, row,
     'Torwart-Statistiken',
     ['Torwart', 'Spiele', 'Paraden', 'Mega-Paraden', 'Anteil Mega-Paraden', 'Gegentore', 'Fangquote', 'Torwart-Dominanz-Wert', 'Schlüsselpässe', 'Fehlauswürfe'],
-    _computeGoalieStats(playerMap, playerEvents, gameStats)
+    _computeGoalieStats(playerMap, playerEvents, filteredEvents)
   );
   meta.goalie = s5; row = s5.nextRow;
 
@@ -868,28 +1012,37 @@ function _computePlayerBeitrag(playerMap, playerEvents, assistEvents, filteredEv
   return rows.map(function(r) { return r.data; });
 }
 
-function _computeGoalieStats(playerMap, playerEvents, gameStats) {
-  var goalieGameIds = {};
-  Object.keys(gameStats).forEach(function(gid) {
-    var gid2 = gameStats[gid].goalieId;
-    if (gid2) {
-      if (!goalieGameIds[gid2]) goalieGameIds[gid2] = [];
-      goalieGameIds[gid2].push(gid);
-    }
+function _computeGoalieStats(playerMap, playerEvents, filteredEvents) {
+  // Which goalie was active in each (game, period)? Use their save events as evidence.
+  // First goalie with a save in a given period wins that period.
+  var periodGoalie = Object.create(null);
+  Object.keys(playerMap).forEach(function(pid) {
+    if (playerMap[pid].type !== 'goalie') return;
+    (playerEvents[pid] || []).forEach(function(e) {
+      var k = String(e.game_id) + '|' + String(e.period || '');
+      if (!periodGoalie[k]) periodGoalie[k] = pid;
+    });
+  });
+
+  // Attribute each gegengoal to the goalie active in that period
+  var goalieGA = Object.create(null);
+  filteredEvents.filter(function(e) { return e.action === 'gegengoal'; }).forEach(function(e) {
+    var pid = periodGoalie[String(e.game_id) + '|' + String(e.period || '')];
+    if (pid) goalieGA[pid] = (goalieGA[pid] || 0) + 1;
   });
 
   var rows = [];
   Object.keys(playerMap).forEach(function(pid) {
-    var player  = playerMap[pid];
+    var player = playerMap[pid];
     if (player.type !== 'goalie') return;
-    var evs     = playerEvents[pid] || [];
-    var gameIds = goalieGameIds[pid] || [];
-    if (gameIds.length === 0 && evs.length === 0) return;
+    var evs = playerEvents[pid] || [];
+    if (evs.length === 0) return;
 
     var saves     = evs.filter(function(e) { return e.action === 'save'; }).length;
     var megaSaves = evs.filter(function(e) { return e.action === 'mega_save'; }).length;
     var total     = saves + megaSaves;
-    var ga        = gameIds.reduce(function(sum, gid) { return sum + (gameStats[gid] ? gameStats[gid].ga : 0); }, 0);
+    var ga        = goalieGA[pid] || 0;
+    var numGames  = new Set(evs.map(function(e) { return String(e.game_id); })).size;
     var svPct     = (total + ga) >= 3 ? total / (total + ga) : null;
     var msvPct    = total > 0 ? megaSaves / total : null;
     var gds       = (total + ga) > 0 ? (megaSaves * 2 + saves) / (total + ga) : null;
@@ -897,8 +1050,8 @@ function _computeGoalieStats(playerMap, playerEvents, gameStats) {
     var bt        = evs.filter(function(e) { return e.action === 'bad_throw'; }).length;
 
     rows.push({
-      data: [player.name, gameIds.length, total, megaSaves, _pct(msvPct), ga, _pct(svPct), _num(gds, 2), kp, bt],
-      sort: gameIds.length * 100 + total,
+      data: [player.name, numGames, total, megaSaves, _pct(msvPct), ga, _pct(svPct), _num(gds, 2), kp, bt],
+      sort: numGames * 100 + total,
     });
   });
   rows.sort(function(a, b) { return b.sort - a.sort; });
@@ -913,7 +1066,7 @@ function _computePerGame(filteredGames, gameStats, eventsByGame) {
       var gid  = String(g.game_id);
       var gs   = gameStats[gid] || { gf: 0, ga: 0, gd: 0 };
       var evs  = eventsByGame[gid] || [];
-      var ppS  = evs.filter(function(e) { return e.action === 'pp_scored'; }).length;
+      var ppS  = evs.filter(function(e) { return e.action === 'goal' && String(e.power_play).toLowerCase() === 'yes'; }).length;
       var ppE  = evs.filter(function(e) { return e.action === 'pp_expired'; }).length;
       var bxK  = evs.filter(function(e) { return e.action === 'box_killed'; }).length;
       var bxC  = evs.filter(function(e) { return e.action === 'box_conceded'; }).length;
@@ -1026,13 +1179,19 @@ function _writeAuxData(sh, playerMap, playerEvents, assistEvents, filteredEvents
 
   // --- Radar data: Torwart profile ---
   // Format: Fähigkeit | Goalie1 | Goalie2 | ...
-  var goalieGameIds = {};
-  Object.keys(gameStats).forEach(function(gid) {
-    var gId2 = gameStats[gid].goalieId;
-    if (gId2) {
-      if (!goalieGameIds[gId2]) goalieGameIds[gId2] = [];
-      goalieGameIds[gId2].push(gid);
-    }
+  // Period-based goalie GA (same logic as _computeGoalieStats)
+  var _pgGoalie = Object.create(null);
+  Object.keys(playerMap).forEach(function(pid) {
+    if (playerMap[pid].type !== 'goalie') return;
+    (playerEvents[pid] || []).forEach(function(e) {
+      var k = String(e.game_id) + '|' + String(e.period || '');
+      if (!_pgGoalie[k]) _pgGoalie[k] = pid;
+    });
+  });
+  var _radarGA = Object.create(null);
+  filteredEvents.filter(function(e) { return e.action === 'gegengoal'; }).forEach(function(e) {
+    var pid = _pgGoalie[String(e.game_id) + '|' + String(e.period || '')];
+    if (pid) _radarGA[pid] = (_radarGA[pid] || 0) + 1;
   });
 
   var radarHeaders  = ['Fähigkeit'];
@@ -1042,24 +1201,24 @@ function _writeAuxData(sh, playerMap, playerEvents, assistEvents, filteredEvents
   var zuverl        = ['Zuverlässigkeit (0-100)'];
 
   Object.keys(playerMap).forEach(function(pid) {
-    var player  = playerMap[pid];
+    var player = playerMap[pid];
     if (player.type !== 'goalie') return;
-    var evs     = playerEvents[pid] || [];
-    var gameIds = goalieGameIds[pid] || [];
-    if (gameIds.length === 0 && evs.length === 0) return;
+    var evs = playerEvents[pid] || [];
+    if (evs.length === 0) return;
 
     var saves     = evs.filter(function(e) { return e.action === 'save'; }).length;
     var megaSaves = evs.filter(function(e) { return e.action === 'mega_save'; }).length;
     var total     = saves + megaSaves;
-    var ga        = gameIds.reduce(function(s, gid) { return s + (gameStats[gid] ? gameStats[gid].ga : 0); }, 0);
+    var ga        = _radarGA[pid] || 0;
+    var numGames  = new Set(evs.map(function(e) { return String(e.game_id); })).size;
     var kp        = evs.filter(function(e) { return e.action === 'key_pass'; }).length;
     var bt        = evs.filter(function(e) { return e.action === 'bad_throw'; }).length;
 
     radarHeaders.push(player.name);
     faenQuote.push(    (total + ga) > 0 ? Math.round(total / (total + ga) * 100) : 0);
     megaAnteil.push(   total > 0 ? Math.round(megaSaves / total * 100) : 0);
-    schluesselpKP.push(Math.min(Math.round(kp / Math.max(gameIds.length, 1) * 100 / 2), 100)); // 2 KP/game = 100
-    zuverl.push(       Math.max(0, 100 - Math.round(bt / Math.max(gameIds.length, 1) * 50)));  // 2 BT/game = 0
+    schluesselpKP.push(Math.min(Math.round(kp / Math.max(numGames, 1) * 100 / 2), 100));
+    zuverl.push(       Math.max(0, 100 - Math.round(bt / Math.max(numGames, 1) * 50)));
   });
 
   var radarHeaderRow = row;
@@ -1180,21 +1339,36 @@ function analyzeCurrentGame() {
   var sh = ss.getActiveSheet();
   var sheetName = sh.getName();
 
-  // Find this game in the Games sheet by display_name or game_id
-  var gamesData = _sheetData(ss, GAMES_SHEET);
+  // Find game_id: 1) from QUERY formula in A1, 2) tab name vs display_name/game_id
   var gameId = null;
   var gameInfo = null;
-  for (var i = 0; i < gamesData.length; i++) {
-    var g = gamesData[i];
-    if (g.display_name === sheetName || g.game_id === sheetName) {
-      gameId = g.game_id;
-      gameInfo = g;
-      break;
+
+  var a1Formula = sh.getRange('A1').getFormula();
+  var formulaMatch = a1Formula.match(/WHERE A='([^']+)'/i);
+  if (formulaMatch) gameId = formulaMatch[1];
+
+  var gamesData = _sheetData(ss, GAMES_SHEET);
+  if (!gameId) {
+    for (var i = 0; i < gamesData.length; i++) {
+      var g = gamesData[i];
+      if (g.display_name === sheetName || g.game_id === sheetName) {
+        gameId = g.game_id;
+        break;
+      }
     }
   }
+  if (gameId && !gameInfo) {
+    for (var j = 0; j < gamesData.length; j++) {
+      if (String(gamesData[j].game_id) === String(gameId)) { gameInfo = gamesData[j]; break; }
+    }
+  }
+
   if (!gameId) {
     SpreadsheetApp.getUi().alert(
-      'Kein Spiel für dieses Tab gefunden.\nBitte auf einem Spiel-Tab ausführen (z.B. "2026-06-20 UHC Limmattal").'
+      'Kein Spiel für dieses Tab gefunden.\n\n' +
+      'Dieses Tab muss entweder:\n' +
+      '- Eine QUERY-Formel in A1 enthalten (=QUERY(Events!A:W,...))\n' +
+      '- Oder gleich heissen wie display_name / game_id in der Games-Tabelle.'
     );
     return;
   }
