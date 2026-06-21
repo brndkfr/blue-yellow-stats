@@ -503,6 +503,8 @@ function App() {
       game={game}
       goalies={activeGoalies}
       players={activePlayers}
+      allGoalies={goalies}
+      allPlayers={players}
       initialRoles={initialRoles}
       scriptUrl={scriptUrl}
       enqueueOrSend={enqueueOrSend}
@@ -511,6 +513,17 @@ function App() {
       stuckQueue={stuckQueue}
       onFlush={onFlush}
       onBack={() => setScreen('schedule')}
+      onRosterChange={(newGoalies, newPlayers) => {
+        setActiveGoalies(newGoalies);
+        setActivePlayers(newPlayers);
+        if (game.id) {
+          const rosterForCache = [
+            ...newGoalies.map((g) => ({ player_id: g.id, number: g.nr, name: g.name, selected: 'yes', role: '' })),
+            ...newPlayers.map((p) => ({ player_id: p.id, number: p.nr, name: p.name, selected: 'yes', role: initialRoles[p.id] || '' })),
+          ];
+          _writeCache(LS_CACHE_ROSTER + game.id, rosterForCache);
+        }
+      }}
       onEndGame={({ us, them }) => {
         const result = `${us}:${them}`;
         // Clear persisted score now that the game is officially over

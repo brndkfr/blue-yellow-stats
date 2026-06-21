@@ -208,7 +208,8 @@ function LTStrafeSheet({ onGegentor, onBoxPlay, onPowerPlay, onClose }) {
 }
 
 function LiveTracker({
-  game, goalies, players, scriptUrl, onBack, onEndGame, initialRoles = {},
+  game, goalies, players, allGoalies = [], allPlayers = [],
+  scriptUrl, onBack, onEndGame, onRosterChange, initialRoles = {},
   enqueueOrSend, queueSize = 0, swQueueSize = 0, stuckQueue = false, onFlush,
 }) {
   const scout = localStorage.getItem("jets_scout") || "";
@@ -285,8 +286,13 @@ function LiveTracker({
   });
   const [goalieModal, setGoalieModal] = React.useState(false);
 
+  // Live roster — starts from pre-game selection, can change mid-game via Kader sheet
+  const [liveGoalies, setLiveGoalies] = React.useState(goalies);
+  const [livePlayers, setLivePlayers] = React.useState(players);
+  const [kaderSheet,  setKaderSheet]  = React.useState(false);
+
   const activeGoalieId = periodGoalies[period] || null;
-  const activeGoalie   = goalies.find((g) => g.id === activeGoalieId) || null;
+  const activeGoalie   = liveGoalies.find((g) => g.id === activeGoalieId) || null;
 
   // Tick counter — bumped every 500ms to drive re-renders while timers run
   const [tick, setTick] = React.useState(0);
@@ -350,7 +356,7 @@ function LiveTracker({
 
   // Persist per-period goalie assignments
   React.useEffect(() => {
-    if (goalies.length <= 1) return;
+    if (liveGoalies.length <= 1) return;
     try {
       localStorage.setItem(sessionKey + '_goalies', JSON.stringify(periodGoalies));
     } catch (_) {}
@@ -358,11 +364,11 @@ function LiveTracker({
 
   // Show goalie picker when entering a period with no assigned goalie
   React.useEffect(() => {
-    if (goalies.length <= 1) return;
+    if (liveGoalies.length <= 1) return;
     if (!periodGoalies[period]) setGoalieModal(true);
   }, [period]);
 
-  const isGoalie    = (p) => goalies.some((g) => g.id === p?.id);
+  const isGoalie    = (p) => liveGoalies.some((g) => g.id === p?.id);
   const getRole     = (p) => playerRoles[p?.id] || "center";
   const setRole     = (id, role) => setPlayerRoles((prev) => ({ ...prev, [id]: role }));
 
@@ -510,6 +516,16 @@ function LiveTracker({
     setBoxPlay(null);
   }
 
+  function fireRosterEvent(newGoalies, newPlayers) {
+    if (!game.id) return;
+    const rosterRows = [
+      ...newGoalies.map((g) => ({ player_id: g.id, number: g.nr, name: g.name, selected: "yes", role: "" })),
+      ...newPlayers.map((p) => ({ player_id: p.id, number: p.nr, name: p.name, selected: "yes", role: playerRoles[p.id] || "center" })),
+    ];
+    enqueueOrSend({ action_type: "saveGameRoster", game_id: game.id, roster: JSON.stringify(rosterRows) });
+    onRosterChange?.(newGoalies, newPlayers);
+  }
+
   function tileState(p) {
     if (assistFor) return assistFor.id === p.id ? "disabled" : "assistTarget";
     return active?.id === p.id ? "selected" : "default";
@@ -565,9 +581,9 @@ function LiveTracker({
                     {scout}
                   </span>
                 )}
-                {goalies.length > 0 && (
+                {liveGoalies.length > 0 && (
                   <span
-                    onClick={goalies.length > 1 ? () => setGoalieModal(true) : undefined}
+                    onClick={liveGoalies.length > 1 ? () => setGoalieModal(true) : undefined}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: "0.2rem",
                       background: activeGoalie ? "rgba(255,205,0,.1)" : "rgba(239,68,68,.12)",
@@ -576,7 +592,7 @@ function LiveTracker({
                       padding: "1px 6px", fontSize: "0.625rem", fontWeight: 700,
                       color: activeGoalie ? "rgba(255,205,0,.75)" : "#fca5a5",
                       letterSpacing: "0.04em", flexShrink: 0,
-                      cursor: goalies.length > 1 ? "pointer" : "default",
+                      cursor: liveGoalies.length > 1 ? "pointer" : "default",
                       touchAction: "manipulation",
                     }}>
                     <Icon name={activeGoalie ? "shield-check" : "shield-off"} size={9}
@@ -596,6 +612,7 @@ function LiveTracker({
                 badge={queueSize + swQueueSize} danger={stuckQueue}
                 onClick={() => onFlush?.()} />
             )}
+            <IconBtn name="users" onClick={() => setKaderSheet(true)} label="Kader" />
             <IconBtn name="circle-help" onClick={() => setHelp(true)} label="Hilfe" />
           </div>
         </div>
@@ -659,9 +676,9 @@ function LiveTracker({
           <LTBoxPlayPanel mode={boxPlay.mode} remaining={boxPlayRemaining} onResolve={resolveBoxPlay} />
         )}
         <section style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          <SectionLabel count={goalies.length}>Goalie</SectionLabel>
+          <SectionLabel count={liveGoalies.length}>Goalie</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "var(--tile-gap)" }}>
-            {goalies.map((g) => {
+            {liveGoalies.map((g) => {
               const isReserve = activeGoalieId !== null && g.id !== activeGoalieId;
               return (
                 <div key={g.id} style={{ opacity: isReserve ? 0.4 : 1 }}>
@@ -674,9 +691,9 @@ function LiveTracker({
         </section>
 
         <section style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          <SectionLabel count={players.length}>Feldspieler</SectionLabel>
+          <SectionLabel count={livePlayers.length}>Feldspieler</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "var(--tile-gap)" }}>
-            {players.map((p) => (
+            {livePlayers.map((p) => (
               <RosterTile key={p.id} nr={p.nr} name={p.name} role="player"
                 playerRole={playerRoles[p.id] || "center"}
                 state={tileState(p)} onClick={() => onTile(p)} />
@@ -1041,6 +1058,118 @@ function LiveTracker({
         </Scrim>
       )}
 
+      {/* ── Kader sheet ── */}
+      {kaderSheet && (
+        <Scrim onClose={() => setKaderSheet(false)}>
+          <SheetSurface style={{ maxHeight: "75%", overflowY: "auto" }}>
+            <Grabber />
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: "1rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem",
+                fontWeight: 700, fontSize: "0.9375rem" }}>
+                <Icon name="users" size={17} color="rgba(255,255,255,.6)" />
+                Kader
+              </div>
+              <IconBtn name="x" onClick={() => setKaderSheet(false)} label="Schliessen" />
+            </div>
+
+            {/* Goalies — tap to set as active for this period */}
+            <p style={{ margin: "0 0 0.5rem", fontSize: "0.625rem", fontWeight: 800,
+              letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>
+              Goalies
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginBottom: "1rem" }}>
+              {allGoalies.map((g) => {
+                const isCurrent = g.id === activeGoalieId;
+                return (
+                  <button key={g.id} onClick={() => {
+                    if (!liveGoalies.some((x) => x.id === g.id)) {
+                      const next = [...liveGoalies, g];
+                      setLiveGoalies(next);
+                      fireRosterEvent(next, livePlayers);
+                    }
+                    setPeriodGoalies((prev) => ({ ...prev, [period]: g.id }));
+                    setKaderSheet(false);
+                  }} style={{
+                    appearance: "none", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "0.65rem 0.875rem", width: "100%",
+                    borderRadius: "var(--radius-lg)", fontFamily: "var(--font-sans)",
+                    background: isCurrent ? "rgba(255,205,0,.12)" : "rgba(255,255,255,.04)",
+                    border: isCurrent ? "1px solid rgba(255,205,0,.35)" : "1px solid rgba(255,255,255,.08)",
+                    touchAction: "manipulation",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                      <Icon name="shield-check" size={15}
+                        color={isCurrent ? "#ffcd00" : "rgba(255,255,255,.25)"} strokeWidth={2} />
+                      <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#fff" }}>
+                        {g.nr ? `#${g.nr} ` : ""}{g.name}
+                      </span>
+                    </div>
+                    {isCurrent && (
+                      <span style={{
+                        fontSize: "0.625rem", fontWeight: 700, letterSpacing: "0.08em",
+                        textTransform: "uppercase", color: "rgba(255,205,0,.7)",
+                        background: "rgba(255,205,0,.1)", borderRadius: "var(--radius-sm)",
+                        padding: "0.15rem 0.45rem",
+                      }}>aktiv</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Field players — toggle active/inactive */}
+            <p style={{ margin: "0 0 0.5rem", fontSize: "0.625rem", fontWeight: 800,
+              letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,.3)" }}>
+              Feldspieler
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+              {allPlayers.map((p) => {
+                const isActive = livePlayers.some((x) => x.id === p.id);
+                return (
+                  <button key={p.id} onClick={() => {
+                    let next;
+                    if (isActive) {
+                      next = livePlayers.filter((x) => x.id !== p.id);
+                      if (active?.id === p.id) setActive(null);
+                      if (assistFor?.id === p.id) setAssistFor(null);
+                    } else {
+                      next = [...livePlayers, p];
+                      if (!playerRoles[p.id]) setRole(p.id, p.role || "center");
+                    }
+                    setLivePlayers(next);
+                    fireRosterEvent(liveGoalies, next);
+                  }} style={{
+                    appearance: "none", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "0.65rem 0.875rem", width: "100%",
+                    borderRadius: "var(--radius-lg)", fontFamily: "var(--font-sans)",
+                    background: isActive ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.02)",
+                    border: isActive ? "1px solid rgba(255,255,255,.15)" : "1px solid rgba(255,255,255,.06)",
+                    opacity: isActive ? 1 : 0.5, touchAction: "manipulation",
+                  }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#fff" }}>
+                      {p.nr ? `#${p.nr} ` : ""}{p.name}
+                    </span>
+                    <div style={{
+                      width: "1.25rem", height: "1.25rem", borderRadius: "4px", flexShrink: 0,
+                      background: isActive ? "rgba(34,197,94,.25)" : "transparent",
+                      border: isActive ? "1px solid rgba(74,222,128,.5)" : "1px solid rgba(255,255,255,.2)",
+                      display: "grid", placeItems: "center",
+                    }}>
+                      {isActive && <Icon name="check" size={10} color="#4ade80" strokeWidth={3} />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SheetSurface>
+        </Scrim>
+      )}
+
       {/* ── Goalie picker ── */}
       {goalieModal && (
         <Scrim onClose={() => setGoalieModal(false)}>
@@ -1054,7 +1183,7 @@ function LiveTracker({
               Wer steht im Goal?
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              {goalies.map((g) => (
+              {liveGoalies.map((g) => (
                 <button key={g.id} onClick={() => {
                   setPeriodGoalies((prev) => ({ ...prev, [period]: g.id }));
                   setGoalieModal(false);
