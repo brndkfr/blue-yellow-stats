@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v24';
+const VERSION           = 'v29';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -673,6 +673,10 @@ const _S_ALTROW    = '#f5f7fc';
 
 function computeStats_(typeFilter) {
   const ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var FILTER_LABELS = { regular: 'Meisterschaft', cup: 'Cup', test: 'Testspiele' };
+  var filterLabel   = typeFilter ? FILTER_LABELS[typeFilter] : 'Alle Spiele';
+  ss.toast('Statistiken werden berechnet...', 'Jets Stats - ' + filterLabel, 120);
+
   const events  = _sheetData(ss, EVENTS_SHEET);
   const squad   = _sheetData(ss, SQUAD_SHEET);
   const games   = _sheetData(ss, GAMES_SHEET);
@@ -705,8 +709,6 @@ function computeStats_(typeFilter) {
   sh.clearContents();
   sh.clearFormats();
 
-  var FILTER_LABELS = { regular: 'Meisterschaft', cup: 'Cup', test: 'Testspiele' };
-  var filterLabel   = typeFilter ? FILTER_LABELS[typeFilter] : 'Alle Spiele';
   var stamp         = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM.yyyy HH:mm');
 
   // Build player map id -> squad object
@@ -789,7 +791,15 @@ function computeStats_(typeFilter) {
   );
   meta.teamBilanz = s2; row = s2.nextRow;
 
-  // Section 3: Torerfolge Feldspieler
+  // Section 3: Statistiken nach Periode
+  var s3p = _writeStatsSection(sh, row,
+    'Statistiken nach Periode',
+    ['Periode', 'Tore', 'Gegentore', 'Tordifferenz', 'Paraden', 'Mega-Paraden', 'Torschüsse', 'Schlüsselpässe', 'Fehlpässe'],
+    _computePeriodBreakdown(filteredEvents)
+  );
+  meta.periodBreakdown = s3p; row = s3p.nextRow;
+
+  // Section 4: Torerfolge Feldspieler
   var s3 = _writeStatsSection(sh, row,
     'Torerfolge Feldspieler',
     ['Spieler', 'Rolle', 'Spiele', 'Tore', 'Vorlagen', 'Punkte', 'Tore Überzahl', 'Vorlagen Überzahl', 'Torschüsse (Zentrum)', 'Torschussquote'],
@@ -933,6 +943,29 @@ function _computeTeamBilanz(gameStats, filteredGames) {
   });
   if (spiele === 0) return [];
   return [[spiele, siege, unentsch, niederl, tore, gegentore, tore - gegentore, heimsiege, auswaertssiege]];
+}
+
+function _computePeriodBreakdown(filteredEvents) {
+  var periods = {};
+  filteredEvents.forEach(function(e) {
+    var p = Number(e.period) || 0;
+    if (!periods[p]) periods[p] = { goals: 0, ga: 0, saves: 0, mega: 0, shots: 0, kp: 0, bp: 0 };
+    var a = e.action || '';
+    if      (a === 'goal')      periods[p].goals++;
+    else if (a === 'gegengoal') periods[p].ga++;
+    else if (a === 'save')      periods[p].saves++;
+    else if (a === 'mega_save') periods[p].mega++;
+    else if (a === 'slot_shot') periods[p].shots++;
+    else if (a === 'key_pass' && e.player_role !== 'goalie') periods[p].kp++;
+    else if (a === 'bad_pass')  periods[p].bp++;
+  });
+  return Object.keys(periods)
+    .map(Number)
+    .sort(function(a, b) { return a - b; })
+    .map(function(p) {
+      var s = periods[p];
+      return [p === 0 ? 'Unbekannt' : 'Periode ' + p, s.goals, s.ga, s.goals - s.ga, s.saves, s.mega, s.shots, s.kp, s.bp];
+    });
 }
 
 function _computePlayerScoring(playerMap, playerEvents, assistEvents, playerGames) {
@@ -1250,8 +1283,9 @@ function _writeAuxData(sh, playerMap, playerEvents, assistEvents, filteredEvents
 function _insertStatsCharts(sh, meta, auxMeta) {
   // Chart 1: Tore & Vorlagen pro Spieler (stacked horizontal bar)
   if (meta.scoring && meta.scoring.dataCount > 0) {
-    var namesR  = sh.getRange(meta.scoring.dataStart, 1, meta.scoring.dataCount, 1);
-    var valuesR = sh.getRange(meta.scoring.dataStart, 4, meta.scoring.dataCount, 2);
+    // dataStart - 1 = column header row ("Spieler", "Tore", "Vorlagen") — needed for series labels
+    var namesR  = sh.getRange(meta.scoring.dataStart - 1, 1, meta.scoring.dataCount + 1, 1);
+    var valuesR = sh.getRange(meta.scoring.dataStart - 1, 4, meta.scoring.dataCount + 1, 2);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.BAR)
       .addRange(namesR).addRange(valuesR)
@@ -1273,7 +1307,7 @@ function _insertStatsCharts(sh, meta, auxMeta) {
       .setOption('title', 'Angriff vs Abwehr (Spieler-Profil)')
       .setOption('hAxis', { title: 'Offensiv-Wert', minValue: 0 })
       .setOption('vAxis', { title: 'Defensiv-Wert' })
-      .setOption('legend', { position: 'none' })
+      .setOption('legend', { position: 'bottom' })
       .setOption('bubble', { textStyle: { fontSize: 9 } })
       .setOption('colors', ['#0033a0'])
       .setOption('width', 520).setOption('height', 380)
@@ -1283,13 +1317,14 @@ function _insertStatsCharts(sh, meta, auxMeta) {
 
   // Chart 3: Tordifferenz pro Spiel (column, positive=navy, negative=red via series color)
   if (meta.perGame && meta.perGame.dataCount > 0) {
-    var dateR = sh.getRange(meta.perGame.dataStart, 1, meta.perGame.dataCount, 1);
-    var gdR   = sh.getRange(meta.perGame.dataStart, 6, meta.perGame.dataCount, 1);
+    // dataStart - 1 = column header row ("Datum", "Tordifferenz") — needed for series label
+    var dateR = sh.getRange(meta.perGame.dataStart - 1, 1, meta.perGame.dataCount + 1, 1);
+    var gdR   = sh.getRange(meta.perGame.dataStart - 1, 6, meta.perGame.dataCount + 1, 1);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.COLUMN)
       .addRange(dateR).addRange(gdR)
       .setOption('title', 'Tordifferenz pro Spiel')
-      .setOption('legend', { position: 'none' })
+      .setOption('legend', { position: 'bottom' })
       .setOption('colors', ['#0033a0'])
       .setOption('vAxis', { title: 'Tordifferenz', baselineColor: '#888' })
       .setOption('width', 520).setOption('height', 300)
@@ -1305,6 +1340,7 @@ function _insertStatsCharts(sh, meta, auxMeta) {
       .addRange(reasonR)
       .setOption('title', 'Gegentore nach Ursache')
       .setOption('pieHole', 0.4)
+      .setOption('legend', { position: 'right' })
       .setOption('width', 440).setOption('height', 320)
       .setPosition(meta.reasons.dataStart, 13, 0, 0)
       .build());
@@ -1338,6 +1374,7 @@ function analyzeCurrentGame() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getActiveSheet();
   var sheetName = sh.getName();
+  ss.toast('Spiel wird analysiert...', 'Jets Stats - ' + sheetName, 120);
 
   // Find game_id: 1) from QUERY formula in A1, 2) tab name vs display_name/game_id
   var gameId = null;
@@ -1557,10 +1594,11 @@ function _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta) {
   // Chart 1: Score progression + event lanes (LINE chart)
   // Jets/Gegner as thick lines; event lanes as dot-only series (lineWidth: 0)
   if (tlMeta.dataCount > 0) {
-    var tlRange = sh.getRange(tlMeta.headerRow, tlMeta.col, tlMeta.dataCount + 1, tlMeta.colCount);
+    var tlNrR   = sh.getRange(tlMeta.headerRow, tlMeta.col, tlMeta.dataCount + 1, 1);
+    var tlDataR = sh.getRange(tlMeta.headerRow, tlMeta.col + 1, tlMeta.dataCount + 1, tlMeta.colCount - 1);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.LINE)
-      .addRange(tlRange)
+      .addRange(tlNrR).addRange(tlDataR)
       .setOption('title', 'Spielverlauf')
       .setOption('legend', { position: 'bottom' })
       .setOption('interpolateNulls', false)
@@ -1583,10 +1621,11 @@ function _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta) {
 
   // Chart 2: Actions per player (stacked BAR)
   if (actMeta.dataCount > 0) {
-    var actRange = sh.getRange(actMeta.headerRow, actMeta.col, actMeta.dataCount + 1, actMeta.colCount);
+    var actLabelR = sh.getRange(actMeta.headerRow, actMeta.col, actMeta.dataCount + 1, 1);
+    var actDataR  = sh.getRange(actMeta.headerRow, actMeta.col + 1, actMeta.dataCount + 1, actMeta.colCount - 1);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.BAR)
-      .addRange(actRange)
+      .addRange(actLabelR).addRange(actDataR)
       .setOption('title', 'Aktionen pro Spieler')
       .setOption('isStacked', true)
       .setOption('legend', { position: 'bottom' })
@@ -1598,12 +1637,13 @@ function _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta) {
 
   // Chart 3: Action type counts (COLUMN)
   if (typMeta.dataCount > 0) {
-    var typRange = sh.getRange(typMeta.headerRow, typMeta.col, typMeta.dataCount + 1, 2);
+    var typLabelR = sh.getRange(typMeta.headerRow, typMeta.col, typMeta.dataCount + 1, 1);
+    var typDataR  = sh.getRange(typMeta.headerRow, typMeta.col + 1, typMeta.dataCount + 1, 1);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.COLUMN)
-      .addRange(typRange)
+      .addRange(typLabelR).addRange(typDataR)
       .setOption('title', 'Aktionen nach Typ')
-      .setOption('legend', { position: 'none' })
+      .setOption('legend', { position: 'bottom' })
       .setOption('colors', ['#0033a0'])
       .setOption('hAxis', { slantedText: true, slantedTextAngle: 40, textStyle: { fontSize: 9 } })
       .setOption('width', 440).setOption('height', 280)
@@ -1613,12 +1653,14 @@ function _insertGameCharts_(sh, tlMeta, actMeta, typMeta, gwMeta) {
 
   // Chart 4: Goalie bilanz (PIE / donut)
   if (gwMeta.dataCount > 0) {
-    var gwRange = sh.getRange(gwMeta.headerRow, gwMeta.col, gwMeta.dataCount + 1, 2);
+    var gwLabelR = sh.getRange(gwMeta.headerRow, gwMeta.col, gwMeta.dataCount + 1, 1);
+    var gwDataR  = sh.getRange(gwMeta.headerRow, gwMeta.col + 1, gwMeta.dataCount + 1, 1);
     sh.insertChart(sh.newChart()
       .setChartType(Charts.ChartType.PIE)
-      .addRange(gwRange)
+      .addRange(gwLabelR).addRange(gwDataR)
       .setOption('title', 'Torwart-Bilanz')
       .setOption('pieHole', 0.4)
+      .setOption('legend', { position: 'right' })
       .setOption('colors', ['#22c55e', '#16a34a', '#f87171'])
       .setOption('width', 340).setOption('height', 280)
       .setPosition(42, chartCol, 0, 0)
