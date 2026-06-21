@@ -230,7 +230,7 @@ function LiveTracker({
   const [gegengoal,   setGegengoal]   = React.useState(false);
   const [help,        setHelp]        = React.useState(false);
   const [toast,       setToast]       = React.useState(null);
-  const [lastEvent,   setLastEvent]   = React.useState(null);
+  const [eventLog,    setEventLog]    = React.useState([]); // { display, params, scoreEffect }[]
   const [score,       setScore]       = React.useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(sessionKey));
@@ -248,7 +248,7 @@ function LiveTracker({
   const [endGame,       setEndGame]       = React.useState(false);
   const [confirmPeriod, setConfirmPeriod] = React.useState(false);
   const [periodPending, setPeriodPending] = React.useState(null);
-  const lastEventRef = React.useRef(null); // { params, scoreEffect: 'us'|'them'|null }
+  const lastTapRef   = React.useRef({ id: null, time: 0 });
 
   // Timer state — restored from localStorage on mount
   const [timerBaseSecs,  setTimerBaseSecs]  = React.useState(() => {
@@ -432,9 +432,8 @@ function LiveTracker({
       player_role: isGoalie(active) ? "goalie" : getRole(active),
       action:      a.code,
     });
-    lastEventRef.current = { params, scoreEffect: null };
     const t = { icon: "check", tone: "info", text: `${a.label} — ${active.nr ? "#" + active.nr + " " : ""}${active.name}` };
-    setLastEvent(t); fireToast(t); setActive(null);
+    pushEvent(t, params, null); fireToast(t); setActive(null);
   }
   function startGoal() { setAssistFor(active); setActive(null); }
   function pickAssist(p) {
@@ -461,11 +460,10 @@ function LiveTracker({
       assist_name: assistPlayer ? assistPlayer.name : "",
       power_play:  powerPlay ? "yes" : "",
     });
-    lastEventRef.current = { params, scoreEffect: 'us' };
-    setScore((s) => ({ ...s, us: s.us + 1 }));
     const t = { icon: "goal", tone: "success", text };
-    setLastEvent(t); fireToast(t);
-    setAssistFor(null); setPowerPlay(false);
+    pushEvent(t, params, 'us');
+    setScore((s) => ({ ...s, us: s.us + 1 }));
+    fireToast(t); setAssistFor(null); setPowerPlay(false);
   }
   function pickReason(r) {
     const params = postEvent({
@@ -475,14 +473,18 @@ function LiveTracker({
       action:      "gegengoal",
       reason:      r ? r.code : "",
     });
-    lastEventRef.current = { params, scoreEffect: 'them' };
-    setScore((s) => ({ ...s, them: s.them + 1 }));
     const t = { icon: "shield-off", tone: "pending", text: `Gegengoal${r ? ` · ${r.label}` : ""}` };
-    setLastEvent(t); fireToast(t); setGegengoal(false);
+    pushEvent(t, params, 'them');
+    setScore((s) => ({ ...s, them: s.them + 1 }));
+    fireToast(t); setGegengoal(false);
   }
-  function undo() {
-    if (!lastEvent || !lastEventRef.current) return;
-    const { params, scoreEffect } = lastEventRef.current;
+  function pushEvent(display, params, scoreEffect) {
+    setEventLog((prev) => [{ display, params, scoreEffect }, ...prev].slice(0, 5));
+  }
+  function deleteEventEntry(idx) {
+    const item = eventLog[idx];
+    if (!item) return;
+    const { params, scoreEffect } = item;
     if (scoreEffect === 'us')   setScore((s) => ({ ...s, us:   Math.max(0, s.us   - 1) }));
     if (scoreEffect === 'them') setScore((s) => ({ ...s, them: Math.max(0, s.them - 1) }));
     if (enqueueOrSend && params) {
@@ -494,10 +496,10 @@ function LiveTracker({
         timestamp:   params.timestamp || '',
       });
     }
-    fireToast({ icon: "undo-2", tone: "info", text: "Letzter Eintrag gelöscht" });
-    setLastEvent(null);
-    lastEventRef.current = null;
+    setEventLog((prev) => prev.filter((_, i) => i !== idx));
+    fireToast({ icon: "undo-2", tone: "info", text: "Eintrag gelöscht" });
   }
+  function undo() { deleteEventEntry(0); }
 
   function resolveBoxPlay(type) {
     const msgs = {
@@ -509,10 +511,9 @@ function LiveTracker({
     const actionCode = type === "killed" ? "box_killed" : type === "conceded" ? "box_conceded" : type === "scored" ? "pp_scored" : "pp_expired";
     const params = postEvent({ action: actionCode });
     const scoreEffect = type === "conceded" ? 'them' : type === "scored" ? 'us' : null;
-    lastEventRef.current = { params, scoreEffect };
     if (type === "conceded") setScore((s) => ({ ...s, them: s.them + 1 }));
     if (type === "scored")   setScore((s) => ({ ...s, us: s.us + 1 }));
-    if (msgs) { setLastEvent(msgs); fireToast(msgs); }
+    if (msgs) { pushEvent(msgs, params, scoreEffect); fireToast(msgs); }
     setBoxPlay(null);
   }
 
@@ -532,6 +533,25 @@ function LiveTracker({
   }
   function onTile(p) {
     if (assistFor) { pickAssist(p); return; }
+    const now = Date.now();
+    const last = lastTapRef.current;
+    lastTapRef.current = { id: p.id, time: now };
+    if (last.id === p.id && now - last.time < 350) {
+      lastTapRef.current = { id: null, time: 0 };
+      if (isGoalie(p)) {
+        // Double-tap goalie = Parade
+        const params = postEvent({
+          player_id: String(p.id || ""), player_nr: p.nr ? String(p.nr) : "",
+          player_name: p.name, player_role: "goalie", action: "save",
+        });
+        const t = { icon: "shield-check", tone: "info", text: `Parade — ${p.nr ? "#" + p.nr + " " : ""}${p.name}` };
+        pushEvent(t, params, null); fireToast(t); setActive(null);
+      } else {
+        // Double-tap field player = Goal flow (skip action sheet)
+        setAssistFor(p); setActive(null);
+      }
+      return;
+    }
     setActive(active?.id === p.id ? null : p);
   }
 
@@ -655,7 +675,7 @@ function LiveTracker({
             <PeriodTabs format={format} active={period} onChange={handlePeriodChange} />
           </div>
           <Button variant="secondary" size="sm" icon="undo-2"
-            disabled={!lastEvent} onClick={undo}>Undo</Button>
+            disabled={eventLog.length === 0} onClick={undo}>Undo</Button>
         </div>
       </header>
 
@@ -700,6 +720,38 @@ function LiveTracker({
             ))}
           </div>
         </section>
+
+        {eventLog.length > 0 && (
+          <section style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <SectionLabel>Letzte Aktionen</SectionLabel>
+            {eventLog.map((item, idx) => {
+              const icColor = { success: "#4ade80", pending: "#fca5a5", info: "rgba(255,255,255,.45)" }[item.display.tone] || "rgba(255,255,255,.45)";
+              return (
+                <div key={idx} style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  background: "rgba(255,255,255,.035)",
+                  border: "1px solid rgba(255,255,255,.07)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "0.5rem 0.6rem",
+                }}>
+                  <Icon name={item.display.icon} size={14} color={icColor} strokeWidth={2} style={{ flexShrink: 0 }} />
+                  <span style={{
+                    flex: 1, fontSize: "0.8125rem", fontWeight: 500,
+                    color: "rgba(255,255,255,.6)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{item.display.text}</span>
+                  <button onClick={() => deleteEventEntry(idx)} style={{
+                    appearance: "none", cursor: "pointer",
+                    background: "none", border: "none", padding: "0.2rem",
+                    display: "grid", placeItems: "center", touchAction: "manipulation",
+                  }} aria-label="Löschen">
+                    <Icon name="trash-2" size={13} color="rgba(255,255,255,.25)" strokeWidth={2} />
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+        )}
       </main>
 
       {/* ── Assist strip ── */}

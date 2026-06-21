@@ -120,7 +120,7 @@ function SectionLabel({ children, count, style, ...rest }) {
 const ROLE_ICON  = { defender: "shield", center: "circle-dot", winger: "zap" };
 const ROLE_COLOR = { defender: "#60a5fa", center: "rgba(255,255,255,.5)", winger: "#4ade80" };
 
-function RosterTile({ nr, name, role = "player", playerRole, state = "default", onClick, style, ...rest }) {
+const RosterTile = React.memo(function RosterTile({ nr, name, role = "player", playerRole, state = "default", onClick, style, ...rest }) {
   const numColor = {
     goalie:  "#ffcd00",
     player:  "var(--blue-400)",
@@ -183,7 +183,7 @@ function RosterTile({ nr, name, role = "player", playerRole, state = "default", 
       }}>{name}</span>
     </button>
   );
-}
+});
 
 /* ---- ActionTile ---- */
 function ActionTile({ icon, label, tint = "neutral", span = 1, onClick, style, ...rest }) {
@@ -233,7 +233,7 @@ function ActionTile({ icon, label, tint = "neutral", span = 1, onClick, style, .
 
 /* ---- GameCard ---- */
 function GameCard({ opponent, venue, date, time, home = true, type = "regular",
-                    live = false, emphasis = "today", onClick, style, ...rest }) {
+                    live = false, emphasis = "today", result = "", onClick, style, ...rest }) {
   const typeLabel = { regular: "Meisterschaft", cup: "Cup", test: "Testspiel", demo: "Demo" }[type] || type;
   const past = emphasis === "past";
   const bg = emphasis === "today"
@@ -268,7 +268,10 @@ function GameCard({ opponent, venue, date, time, home = true, type = "regular",
           color: past ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.55)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{venue}</p>}
       </div>
-      <Icon name="chevron-right" size={18} color={past ? "rgba(255,255,255,.3)" : "rgba(255,255,255,.5)"} />
+      {past && result
+        ? <span style={{ flexShrink: 0, fontSize: "0.9375rem", fontWeight: 800, color: "rgba(255,255,255,.55)", letterSpacing: "-0.02em" }}>{result}</span>
+        : <Icon name="chevron-right" size={18} color={past ? "rgba(255,255,255,.3)" : "rgba(255,255,255,.5)"} />
+      }
     </button>
   );
 }
