@@ -42,10 +42,20 @@ async function handlePost(request) {
       const formData = await clone.formData();
       const params   = { _url: clone.url };
       for (const [k, v] of formData.entries()) params[k] = v;
-      await dbPush(params);
-      await self.registration.sync.register(SYNC_TAG);
-      const all = await dbGetAll();
-      notifyClients(all.length);
+      try {
+        await dbPush(params);
+        await self.registration.sync.register(SYNC_TAG);
+        const all = await dbGetAll();
+        notifyClients(all.length);
+      } catch (_) {
+        // IndexedDB unavailable — tell the client to use localStorage instead
+        const clients = await self.clients.matchAll({ type: 'window' });
+        clients.forEach((c) => c.postMessage({ type: 'SW_QUEUE_ERROR', params }));
+        // Return a real error so the app's fetch().catch() activates its own queue
+        return new Response(JSON.stringify({ status: 'error', message: 'idb_unavailable' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
     } catch (_) {}
     // Synthetic success so the app doesn't activate its own localStorage queue
     return new Response(JSON.stringify({ status: 'queued' }), {

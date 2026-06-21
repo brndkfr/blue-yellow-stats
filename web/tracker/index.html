@@ -73,6 +73,9 @@
       if (e.data && e.data.type === 'SW_QUEUE_SIZE') {
         window.dispatchEvent(new CustomEvent('jets-sw-queue', { detail: e.data.size }));
       }
+      if (e.data && e.data.type === 'SW_QUEUE_ERROR') {
+        window.dispatchEvent(new CustomEvent('jets-sw-error', { detail: e.data.params }));
+      }
     });
   }
 </script>

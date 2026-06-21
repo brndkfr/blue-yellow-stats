@@ -6,6 +6,7 @@ const LS_KEY_URL      = 'jets_script_url';
 const LS_CACHE_SQUAD  = 'jets_cache_squad';
 const LS_CACHE_GAMES  = 'jets_cache_games';
 const LS_CACHE_ROSTER = 'jets_cache_roster_';
+const LS_QUEUE_KEY    = 'jets_event_queue';
 
 function _readCache(key) {
   try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; }
@@ -16,6 +17,133 @@ function _writeCache(key, data) {
 function _clearAllCaches() {
   [LS_CACHE_SQUAD, LS_CACHE_GAMES].forEach((k) => localStorage.removeItem(k));
   Object.keys(localStorage).filter((k) => k.startsWith(LS_CACHE_ROSTER)).forEach((k) => localStorage.removeItem(k));
+}
+
+// ---------------------------------------------------------------------------
+// Event queue — lives at App level so it survives screen transitions
+// ---------------------------------------------------------------------------
+
+function _readQueue() {
+  try { return JSON.parse(localStorage.getItem(LS_QUEUE_KEY) || '[]'); }
+  catch (_) { return []; }
+}
+function _writeQueue(q) {
+  try { localStorage.setItem(LS_QUEUE_KEY, JSON.stringify(q)); return true; }
+  catch (_) { return false; } // quota exceeded
+}
+
+function useEventQueue(scriptUrl) {
+  const [queueSize,    setQueueSize]    = React.useState(() => _readQueue().length);
+  const [swQueueSize,  setSwQueueSize]  = React.useState(0);
+  const [storageError, setStorageError] = React.useState(false);
+  const isFlushingRef  = React.useRef(false);
+  const flushRef       = React.useRef(null);
+
+  async function flush() {
+    if (!scriptUrl || isFlushingRef.current) return;
+    const q = _readQueue();
+    if (q.length === 0) return;
+    isFlushingRef.current = true;
+    const remaining = [];
+    for (const params of q) {
+      try {
+        const r = await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams(params) });
+        if (!r.ok) throw new Error('http ' + r.status);
+        const body = await r.json();
+        if (body && body.status === 'error') throw new Error('server error');
+      } catch (_) {
+        remaining.push(params);
+      }
+    }
+    _writeQueue(remaining);
+    setQueueSize(remaining.length);
+    isFlushingRef.current = false;
+  }
+
+  // Keep flushRef current so callbacks always call the latest closure
+  flushRef.current = flush;
+
+  function enqueueOrSend(params) {
+    if (!scriptUrl) return;
+    fetch(scriptUrl, { method: 'POST', body: new URLSearchParams(params) })
+      .then((r) => {
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+      })
+      .then((body) => {
+        if (body && body.status === 'error') throw new Error(body.message || 'server error');
+        // Success — drain any leftover queued items
+        flushRef.current();
+      })
+      .catch(() => {
+        const q = _readQueue();
+        q.push({ ...params, was_queued: 'yes' });
+        const ok = _writeQueue(q);
+        if (!ok) {
+          // localStorage quota exceeded — show persistent banner and attempt direct re-POST
+          setStorageError(true);
+          fetch(scriptUrl, {
+            method: 'POST',
+            body: new URLSearchParams({ ...params, was_queued: 'yes' }),
+          }).catch(() => {});
+        } else {
+          setQueueSize(q.length);
+        }
+      });
+  }
+
+  // App-level listeners — survive all screen changes
+  React.useEffect(() => {
+    if (!scriptUrl) return;
+    flushRef.current();
+    const onFocus   = () => flushRef.current();
+    const onVisible = () => { if (document.visibilityState === 'visible') flushRef.current(); };
+    const onSwQueue = (e) => setSwQueueSize(e.detail || 0);
+    const onSwError = (e) => {
+      // SW could not save to IndexedDB — absorb into localStorage queue
+      const params = e.detail;
+      if (!params) return;
+      const q = _readQueue();
+      q.push({ ...params, was_queued: 'yes' });
+      if (_writeQueue(q)) setQueueSize(q.length);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('jets-sw-queue', onSwQueue);
+    window.addEventListener('jets-sw-error', onSwError);
+    const interval = setInterval(() => flushRef.current(), 30_000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('jets-sw-queue', onSwQueue);
+      window.removeEventListener('jets-sw-error', onSwError);
+    };
+  }, [scriptUrl]);
+
+  // Warn before closing tab if events are still pending
+  React.useEffect(() => {
+    function onBeforeUnload(e) {
+      if (queueSize + swQueueSize > 0) { e.preventDefault(); e.returnValue = ''; }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [queueSize, swQueueSize]);
+
+  // Stuck-queue: oldest event > 2 min old means drain is failing permanently
+  const stuckQueue = React.useMemo(() => {
+    if (queueSize === 0) return false;
+    const q = _readQueue();
+    const oldest = q.find((item) => item.timestamp);
+    if (!oldest) return false;
+    return Date.now() - new Date(oldest.timestamp).getTime() > 2 * 60 * 1000;
+  }, [queueSize]);
+
+  return {
+    queueSize, swQueueSize, enqueueOrSend,
+    onFlush: () => flushRef.current(),
+    storageError, setStorageError, stuckQueue,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +325,11 @@ function App() {
   const [editingGame,   setEditingGame]  = React.useState(null);
   const [editRoster,    setEditRoster]   = React.useState(null);
   const [showSettings,  setShowSettings] = React.useState(false);
-  const [squadEdit,     setSquadEdit]    = React.useState(false);
+
+  const {
+    queueSize, swQueueSize, enqueueOrSend, onFlush,
+    storageError, setStorageError, stuckQueue,
+  } = useEventQueue(scriptUrl);
 
   // Load squad + games — stale-while-revalidate: serve cache instantly, refresh in background
   React.useEffect(() => {
@@ -322,17 +454,14 @@ function App() {
     setScreen('schedule');
   }
 
-  // Show config screen if no URL is stored
-  if (!scriptUrl) {
-    return <ConfigScreen onSave={handleConfigSave} />;
-  }
+  // Config + loading: no events can be queued yet, early return is safe
+  if (!scriptUrl) return <ConfigScreen onSave={handleConfigSave} />;
+  if (loading)    return <LoadingScreen message="Loading squad and games…" />;
 
-  if (loading) {
-    return <LoadingScreen message="Loading squad and games…" />;
-  }
-
+  // Compute active screen content — always wrapped in root div so banner is visible everywhere
+  let screenContent;
   if (loadError) {
-    return (
+    screenContent = (
       <div style={{
         position: 'absolute', inset: 0,
         background: 'var(--bg-app)', color: '#fff',
@@ -358,46 +487,48 @@ function App() {
         </button>
       </div>
     );
-  }
-
-  if (screen === 'editor') {
-    return <RosterEditor
+  } else if (screen === 'editor') {
+    screenContent = <RosterEditor
       goalies={goalies}
       players={players}
       scriptUrl={scriptUrl}
+      enqueue={enqueueOrSend}
       initialGame={editingGame}
       initialRoster={editRoster}
       onSave={saveFromEditor}
       onBack={() => { setEditingGame(null); setEditRoster(null); setScreen('schedule'); }}
     />;
-  }
-  if (screen === 'tracker') {
-    return <LiveTracker
+  } else if (screen === 'tracker') {
+    screenContent = <LiveTracker
       game={game}
       goalies={activeGoalies}
       players={activePlayers}
       initialRoles={initialRoles}
       scriptUrl={scriptUrl}
+      enqueueOrSend={enqueueOrSend}
+      queueSize={queueSize}
+      swQueueSize={swQueueSize}
+      stuckQueue={stuckQueue}
+      onFlush={onFlush}
       onBack={() => setScreen('schedule')}
       onEndGame={({ us, them }) => {
         const result = `${us}:${them}`;
-        // Fire-and-forget save
-        if (scriptUrl && game.id) {
-          fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
-            action_type:       'saveGame',
-            game_id:           game.id,
-            display_name:      game.display_name || '',
-            game_date:         game.date         || '',
-            game_start:        game.time         || '',
-            opponent:          game.opponent     || '',
-            type:              game.type         || '',
-            venue:             game.venue        || '',
-            home:              game.home ? 'yes' : 'no',
-            format:            String(game.format || 2),
+        if (game.id) {
+          enqueueOrSend({
+            action_type:        'saveGame',
+            game_id:            game.id,
+            display_name:       game.display_name || '',
+            game_date:          game.date         || '',
+            game_start:         game.time         || '',
+            opponent:           game.opponent     || '',
+            type:               game.type         || '',
+            venue:              game.venue        || '',
+            home:               game.home ? 'yes' : 'no',
+            format:             String(game.format || 2),
             minutes_per_period: String(game.minutes_per_period || 20),
-            team:              'Jets U14B Blau',
+            team:               'Jets U14B Blau',
             result,
-          }) }).catch(() => {});
+          });
         }
         setGames((prev) => {
           const updated = prev.map((g) => g.id === game.id ? { ...g, result } : g);
@@ -412,9 +543,8 @@ function App() {
         setScreen('schedule');
       }}
     />;
-  }
-  if (screen === 'squad') {
-    return <SquadEditor
+  } else if (screen === 'squad') {
+    screenContent = <SquadEditor
       goalies={goalies}
       players={players}
       scriptUrl={scriptUrl}
@@ -430,19 +560,18 @@ function App() {
         setScreen('schedule');
       }}
     />;
-  }
-  const shortUrl = scriptUrl.replace(/^https:\/\/script\.google\.com\/macros\/s\//, '').slice(0, 24) + '…';
-
-  return (
-    <div style={{ position: 'absolute', inset: 0 }}>
-      <Schedule
-        games={games}
-        onOpen={openGame}
-        onEdit={handleEditGame}
-        onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
-        onSettings={() => setShowSettings(true)}
-        onEditSquad={() => setScreen('squad')}
-      />
+  } else {
+    const shortUrl = scriptUrl.replace(/^https:\/\/script\.google\.com\/macros\/s\//, '').slice(0, 24) + '…';
+    screenContent = (
+      <>
+        <Schedule
+          games={games}
+          onOpen={openGame}
+          onEdit={handleEditGame}
+          onNewGame={() => { setEditingGame(null); setEditRoster(null); setScreen('editor'); }}
+          onSettings={() => setShowSettings(true)}
+          onEditSquad={() => setScreen('squad')}
+        />
 
       {/* Settings sheet */}
       {showSettings && (
@@ -503,6 +632,36 @@ function App() {
           </div>
         </div>
       )}
+      </>
+    );
+  }
+
+  return (
+    <div style={{ position: 'absolute', inset: 0 }}>
+      {/* Storage-full error banner — persistent until dismissed, visible on every screen */}
+      {storageError && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
+          background: '#7f1d1d', borderBottom: '1px solid #dc2626',
+          padding: '0.5rem 0.75rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
+          fontFamily: 'var(--font-sans)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Icon name="alert-triangle" size={15} color="#fca5a5" />
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#fca5a5' }}>
+              Speicher voll — Eintrag möglicherweise nicht gesichert
+            </span>
+          </div>
+          <button onClick={() => setStorageError(false)} style={{
+            appearance: 'none', background: 'none', border: 'none',
+            cursor: 'pointer', color: '#fca5a5', padding: '0.25rem', flexShrink: 0,
+          }}>
+            <Icon name="x" size={14} color="#fca5a5" />
+          </button>
+        </div>
+      )}
+      {screenContent}
     </div>
   );
 }

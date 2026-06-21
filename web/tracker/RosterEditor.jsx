@@ -268,7 +268,7 @@ function _toIso(raw) {
 }
 
 /* ── RosterEditor ── */
-function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster, onSave, onBack }) {
+function RosterEditor({ goalies, players, scriptUrl, enqueue, initialGame, initialRoster, onSave, onBack }) {
   const isEdit = Boolean(initialGame && initialGame.id);
 
   const [opponent,   setOpponent]   = React.useState(initialGame ? initialGame.opponent || "" : "");
@@ -361,30 +361,37 @@ function RosterEditor({ goalies, players, scriptUrl, initialGame, initialRoster,
       rolesById,
     );
 
-    if (scriptUrl) {
-      const body = new URLSearchParams({
-        action_type:  "saveGame",
-        game_id:      gameId,
-        display_name: displayName,
-        game_date:    displayDate,
-        game_start:   timeStr,
-        opponent:     oppStr,
-        type:         type,
-        venue:        venue.trim(),
-        home:         home ? "yes" : "no",
-        format:            String(format),
+    if (enqueue) {
+      enqueue({
+        action_type:        "saveGame",
+        game_id:            gameId,
+        display_name:       displayName,
+        game_date:          displayDate,
+        game_start:         timeStr,
+        opponent:           oppStr,
+        type,
+        venue:              venue.trim(),
+        home:               home ? "yes" : "no",
+        format:             String(format),
         minutes_per_period: String(minutes),
-        team:              "Jets U14B Blau",
+        team:               "Jets U14B Blau",
       });
-      const rosterBody = new URLSearchParams({
+      enqueue({
         action_type: "saveGameRoster",
         game_id:     gameId,
         roster:      JSON.stringify(rosterRows),
       });
-      Promise.all([
-        fetch(scriptUrl, { method: "POST", body }),
-        fetch(scriptUrl, { method: "POST", body: rosterBody }),
-      ]).catch(() => {});
+    } else if (scriptUrl) {
+      // Fallback if no queue provided (should not happen in normal app flow)
+      fetch(scriptUrl, { method: "POST", body: new URLSearchParams({
+        action_type: "saveGame", game_id: gameId, display_name: displayName,
+        game_date: displayDate, game_start: timeStr, opponent: oppStr, type,
+        venue: venue.trim(), home: home ? "yes" : "no",
+        format: String(format), minutes_per_period: String(minutes), team: "Jets U14B Blau",
+      }) }).catch(() => {});
+      fetch(scriptUrl, { method: "POST", body: new URLSearchParams({
+        action_type: "saveGameRoster", game_id: gameId, roster: JSON.stringify(rosterRows),
+      }) }).catch(() => {});
     }
   }
 

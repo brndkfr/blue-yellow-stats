@@ -3,16 +3,6 @@
    Brand: #0033a0 navy · #ffcd00 gold
    Roles: defender (shield/blue) · center (circle-dot/white) · winger (zap/green) */
 
-const LS_QUEUE_KEY = 'jets_event_queue';
-
-function _readQueue() {
-  try { return JSON.parse(localStorage.getItem(LS_QUEUE_KEY) || '[]'); }
-  catch (_) { return []; }
-}
-function _writeQueue(q) {
-  try { localStorage.setItem(LS_QUEUE_KEY, JSON.stringify(q)); }
-  catch (_) {}
-}
 
 const FIELD_ROLES = [
   { id: "defender", icon: "shield",      label: "Def",  color: "#60a5fa", bg: "rgba(37,99,235,.2)",  border: "rgba(96,165,250,.4)"   },
@@ -73,15 +63,15 @@ function Grabber() {
   );
 }
 
-function IconBtn({ name, onClick, label, badge }) {
+function IconBtn({ name, onClick, label, badge, danger = false }) {
   return (
     <button onClick={onClick} aria-label={label} style={{
       appearance: "none", cursor: "pointer",
       width: "2.25rem", height: "2.25rem",
       borderRadius: "var(--radius-pill)",
-      background: "rgba(255,255,255,.06)",
-      border: "1px solid rgba(255,255,255,.1)",
-      color: "rgba(255,255,255,.65)",
+      background: danger ? "rgba(185,28,28,.25)" : "rgba(255,255,255,.06)",
+      border: danger ? "1px solid rgba(239,68,68,.5)" : "1px solid rgba(255,255,255,.1)",
+      color: danger ? "#fca5a5" : "rgba(255,255,255,.65)",
       display: "grid", placeItems: "center",
       fontFamily: "var(--font-sans)", position: "relative",
       flexShrink: 0,
@@ -217,7 +207,10 @@ function LTStrafeSheet({ onGegentor, onBoxPlay, onPowerPlay, onClose }) {
   );
 }
 
-function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, initialRoles = {} }) {
+function LiveTracker({
+  game, goalies, players, scriptUrl, onBack, onEndGame, initialRoles = {},
+  enqueueOrSend, queueSize = 0, swQueueSize = 0, stuckQueue = false, onFlush,
+}) {
   const scout = localStorage.getItem("jets_scout") || "";
   const [period,      setPeriod]      = React.useState(1);
   const [format,      setFormat]      = React.useState(game.format || 2);
@@ -235,8 +228,6 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     players.forEach((p) => { r[p.id] = (initialRoles && initialRoles[p.id]) || p.role || "center"; });
     return r;
   });
-  const [queueSize,   setQueueSize]   = React.useState(() => _readQueue().length);
-  const [swQueueSize, setSwQueueSize] = React.useState(0);
   const [confirmLeave, setConfirmLeave] = React.useState(false);
   const [endGame,      setEndGame]      = React.useState(false);
   const lastEventRef = React.useRef(null); // { params, scoreEffect: 'us'|'them'|null }
@@ -248,52 +239,6 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     return () => { if (bar) bar.style.display = ''; };
   }, []);
   const toastTimer = React.useRef(null);
-  const flushRef   = React.useRef(null);
-
-  // Flush offline queue on mount, on window focus, and on tab visibility
-  React.useEffect(() => {
-    if (!scriptUrl) return;
-
-    async function flush() {
-      const q = _readQueue();
-      if (q.length === 0) return;
-      const remaining = [];
-      for (const params of q) {
-        try {
-          const r = await fetch(scriptUrl, { method: 'POST', body: new URLSearchParams(params) });
-          if (!r.ok) throw new Error('http ' + r.status);
-          const body = await r.json();
-          if (body && body.status === 'error') throw new Error('server error');
-        } catch (_) {
-          remaining.push(params);
-        }
-      }
-      _writeQueue(remaining);
-      setQueueSize(remaining.length);
-    }
-
-    flushRef.current = flush;
-    flush();
-
-    function onFocus()   { flushRef.current?.(); }
-    function onVisible() { if (document.visibilityState === 'visible') flushRef.current?.(); }
-    function onSwQueue(e) { setSwQueueSize(e.detail || 0); }
-
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('jets-sw-queue', onSwQueue);
-
-    // Periodic flush every 30 s — catches transient Apps Script timeouts
-    // that aren't real network failures (fallback for non-SW environments)
-    const interval = setInterval(() => { flushRef.current?.(); }, 30_000);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('jets-sw-queue', onSwQueue);
-    };
-  }, [scriptUrl]);
 
   React.useEffect(() => {
     if (!boxPlay) return;
@@ -317,7 +262,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
   }
 
   function postEvent(fields) {
-    if (!scriptUrl) return null;
+    if (!scriptUrl || !enqueueOrSend) return null;
     const params = {
       game_id:    game.id       || "",
       game_date:  game.date     || "",
@@ -332,21 +277,7 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
       was_queued: "no",
       ...fields,
     };
-    fetch(scriptUrl, { method: "POST", body: new URLSearchParams(params) })
-      .then((r) => {
-        if (!r.ok) throw new Error('http ' + r.status);
-        return r.json();
-      })
-      .then((body) => {
-        if (body && body.status === 'error') throw new Error(body.message || 'server error');
-        flushRef.current?.();
-      })
-      .catch(() => {
-        const q = _readQueue();
-        q.push({ ...params, was_queued: "yes" });
-        _writeQueue(q);
-        setQueueSize(q.length);
-      });
+    enqueueOrSend(params);
     return params;
   }
 
@@ -411,14 +342,14 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
     const { params, scoreEffect } = lastEventRef.current;
     if (scoreEffect === 'us')   setScore((s) => ({ ...s, us:   Math.max(0, s.us   - 1) }));
     if (scoreEffect === 'them') setScore((s) => ({ ...s, them: Math.max(0, s.them - 1) }));
-    if (scriptUrl && params) {
-      fetch(scriptUrl, { method: 'POST', body: new URLSearchParams({
+    if (enqueueOrSend && params) {
+      enqueueOrSend({
         action_type: 'deleteEvent',
-        game_id:     params.game_id    || '',
-        player_id:   params.player_id  || '',
-        action:      params.action     || '',
-        timestamp:   params.timestamp  || '',
-      }) }).catch(() => {});
+        game_id:     params.game_id   || '',
+        player_id:   params.player_id || '',
+        action:      params.action    || '',
+        timestamp:   params.timestamp || '',
+      });
     }
     fireToast({ icon: "undo-2", tone: "info", text: "Letzter Eintrag gelöscht" });
     setLastEvent(null);
@@ -503,8 +434,9 @@ function LiveTracker({ game, goalies, players, scriptUrl, onBack, onEndGame, ini
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
             <ScoreDisplay us={score.us} them={score.them} />
             {(queueSize + swQueueSize) > 0 && (
-              <IconBtn name="wifi-off" label={`${queueSize + swQueueSize} ausstehend`} badge={queueSize + swQueueSize}
-                onClick={() => flushRef.current?.()} />
+              <IconBtn name="wifi-off" label={`${queueSize + swQueueSize} ausstehend`}
+                badge={queueSize + swQueueSize} danger={stuckQueue}
+                onClick={() => onFlush?.()} />
             )}
             <IconBtn name="circle-help" onClick={() => setHelp(true)} label="Hilfe" />
           </div>
