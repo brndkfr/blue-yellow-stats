@@ -272,6 +272,22 @@ function LiveTracker({
     return false;
   });
 
+  // Per-period goalie assignment: { [period]: goalieId }
+  const [periodGoalies, setPeriodGoalies] = React.useState(() => {
+    if (goalies.length === 1) {
+      return { 1: goalies[0].id, 2: goalies[0].id, 3: goalies[0].id, 4: goalies[0].id };
+    }
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey + '_goalies'));
+      if (s && typeof s === 'object') return s;
+    } catch (_) {}
+    return {};
+  });
+  const [goalieModal, setGoalieModal] = React.useState(false);
+
+  const activeGoalieId = periodGoalies[period] || null;
+  const activeGoalie   = goalies.find((g) => g.id === activeGoalieId) || null;
+
   // Tick counter — bumped every 500ms to drive re-renders while timers run
   const [tick, setTick] = React.useState(0);
 
@@ -331,6 +347,20 @@ function LiveTracker({
     try { navigator.vibrate?.([200, 100, 200]); } catch (_) {}
     fireToast({ icon: "flag", tone: "pending", text: "Zeit abgelaufen!" });
   }, [timerRemaining, timerRunning]);
+
+  // Persist per-period goalie assignments
+  React.useEffect(() => {
+    if (goalies.length <= 1) return;
+    try {
+      localStorage.setItem(sessionKey + '_goalies', JSON.stringify(periodGoalies));
+    } catch (_) {}
+  }, [periodGoalies]);
+
+  // Show goalie picker when entering a period with no assigned goalie
+  React.useEffect(() => {
+    if (goalies.length <= 1) return;
+    if (!periodGoalies[period]) setGoalieModal(true);
+  }, [period]);
 
   const isGoalie    = (p) => goalies.some((g) => g.id === p?.id);
   const getRole     = (p) => playerRoles[p?.id] || "center";
@@ -433,9 +463,9 @@ function LiveTracker({
   }
   function pickReason(r) {
     const params = postEvent({
-      player_id:   "",
-      player_nr:   "",
-      player_name: "",
+      player_id:   activeGoalie ? String(activeGoalie.id || "") : "",
+      player_nr:   activeGoalie && activeGoalie.nr ? String(activeGoalie.nr) : "",
+      player_name: activeGoalie ? activeGoalie.name : "",
       action:      "gegengoal",
       reason:      r ? r.code : "",
     });
@@ -535,6 +565,27 @@ function LiveTracker({
                     {scout}
                   </span>
                 )}
+                {goalies.length > 0 && (
+                  <span
+                    onClick={goalies.length > 1 ? () => setGoalieModal(true) : undefined}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "0.2rem",
+                      background: activeGoalie ? "rgba(255,205,0,.1)" : "rgba(239,68,68,.12)",
+                      border: activeGoalie ? "1px solid rgba(255,205,0,.25)" : "1px solid rgba(239,68,68,.3)",
+                      borderRadius: "var(--radius-pill)",
+                      padding: "1px 6px", fontSize: "0.625rem", fontWeight: 700,
+                      color: activeGoalie ? "rgba(255,205,0,.75)" : "#fca5a5",
+                      letterSpacing: "0.04em", flexShrink: 0,
+                      cursor: goalies.length > 1 ? "pointer" : "default",
+                      touchAction: "manipulation",
+                    }}>
+                    <Icon name={activeGoalie ? "shield-check" : "shield-off"} size={9}
+                      color={activeGoalie ? "rgba(255,205,0,.6)" : "#f87171"} strokeWidth={2.5} />
+                    {activeGoalie
+                      ? `Goal: ${activeGoalie.nr ? `#${activeGoalie.nr}` : activeGoalie.name}`
+                      : "Goal: ?"}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -610,10 +661,15 @@ function LiveTracker({
         <section style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           <SectionLabel count={goalies.length}>Goalie</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "var(--tile-gap)" }}>
-            {goalies.map((g) => (
-              <RosterTile key={g.id} nr={g.nr} name={g.name} role="goalie"
-                state={tileState(g)} onClick={() => onTile(g)} />
-            ))}
+            {goalies.map((g) => {
+              const isReserve = activeGoalieId !== null && g.id !== activeGoalieId;
+              return (
+                <div key={g.id} style={{ opacity: isReserve ? 0.4 : 1 }}>
+                  <RosterTile nr={g.nr} name={g.name} role="goalie"
+                    state={tileState(g)} onClick={() => onTile(g)} />
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -947,6 +1003,7 @@ function LiveTracker({
                   try {
                     localStorage.removeItem(sessionKey);
                     localStorage.removeItem(sessionKey + '_timer');
+                    localStorage.removeItem(sessionKey + '_goalies');
                   } catch (_) {}
                   onEndGame({ us: score.us, them: score.them });
                 }}>
@@ -979,6 +1036,57 @@ function LiveTracker({
               <Button variant="danger" size="md" fullWidth onClick={onBack}>
                 Verlassen
               </Button>
+            </div>
+          </SheetSurface>
+        </Scrim>
+      )}
+
+      {/* ── Goalie picker ── */}
+      {goalieModal && (
+        <Scrim onClose={() => setGoalieModal(false)}>
+          <SheetSurface>
+            <Grabber />
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.45rem",
+              fontWeight: 700, fontSize: "0.9375rem", marginBottom: "1rem",
+            }}>
+              <Icon name="shield-check" size={17} color="#ffcd00" />
+              Wer steht im Goal?
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              {goalies.map((g) => (
+                <button key={g.id} onClick={() => {
+                  setPeriodGoalies((prev) => ({ ...prev, [period]: g.id }));
+                  setGoalieModal(false);
+                }} style={{
+                  appearance: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "0.75rem",
+                  padding: "0.75rem 0.875rem",
+                  borderRadius: "var(--radius-xl)",
+                  background: g.id === activeGoalieId ? "rgba(255,205,0,.12)" : "rgba(255,255,255,.04)",
+                  border: g.id === activeGoalieId ? "1px solid rgba(255,205,0,.35)" : "1px solid rgba(255,255,255,.08)",
+                  fontFamily: "var(--font-sans)", touchAction: "manipulation", width: "100%",
+                }}>
+                  <span style={{
+                    display: "grid", placeItems: "center",
+                    width: "2.25rem", height: "2.25rem", flexShrink: 0,
+                    borderRadius: "var(--radius-lg)",
+                    background: "rgba(255,205,0,.15)", border: "1px solid rgba(255,205,0,.3)",
+                  }}>
+                    <Icon name="shield-check" size={16} color="#ffcd00" strokeWidth={2} />
+                  </span>
+                  <div style={{ textAlign: "left" }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9375rem", color: "#fff" }}>
+                      {g.nr ? `#${g.nr} ` : ""}{g.name}
+                    </p>
+                    {g.id === activeGoalieId && (
+                      <p style={{ margin: "0.1rem 0 0", fontSize: "0.75rem", color: "rgba(255,205,0,.6)" }}>
+                        aktiv
+                      </p>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           </SheetSurface>
         </Scrim>
