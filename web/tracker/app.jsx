@@ -513,6 +513,8 @@ function App() {
       onBack={() => setScreen('schedule')}
       onEndGame={({ us, them }) => {
         const result = `${us}:${them}`;
+        // Clear persisted score now that the game is officially over
+        try { localStorage.removeItem('jets_score_' + game.id); } catch (_) {}
         if (game.id) {
           enqueueOrSend({
             action_type:        'saveGame',

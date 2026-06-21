@@ -212,6 +212,13 @@ function LiveTracker({
   enqueueOrSend, queueSize = 0, swQueueSize = 0, stuckQueue = false, onFlush,
 }) {
   const scout = localStorage.getItem("jets_scout") || "";
+
+  // Stable session key: real game.id or an ephemeral id for ad-hoc games.
+  // Used to scope score persistence so sessions never collide.
+  const sessionKey = React.useRef(
+    game.id ? ('jets_score_' + game.id) : ('jets_score_adhoc_' + Date.now())
+  ).current;
+
   const [period,      setPeriod]      = React.useState(1);
   const [format,      setFormat]      = React.useState(game.format || 2);
   const [active,      setActive]      = React.useState(null);
@@ -221,7 +228,13 @@ function LiveTracker({
   const [help,        setHelp]        = React.useState(false);
   const [toast,       setToast]       = React.useState(null);
   const [lastEvent,   setLastEvent]   = React.useState(null);
-  const [score,       setScore]       = React.useState({ us: 0, them: 0 });
+  const [score,       setScore]       = React.useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey));
+      if (s && typeof s.us === 'number' && typeof s.them === 'number') return s;
+    } catch (_) {}
+    return { us: 0, them: 0 };
+  });
   const [boxPlay,     setBoxPlay]     = React.useState(null); // null | { mode:"box"|"power", seconds:120 }
   const [playerRoles, setPlayerRoles] = React.useState(() => {
     const r = {};
@@ -238,6 +251,12 @@ function LiveTracker({
     if (bar) bar.style.display = 'none';
     return () => { if (bar) bar.style.display = ''; };
   }, []);
+
+  // Persist score so an accidental reload restores it
+  React.useEffect(() => {
+    try { localStorage.setItem(sessionKey, JSON.stringify(score)); } catch (_) {}
+  }, [score, sessionKey]);
+
   const toastTimer = React.useRef(null);
 
   React.useEffect(() => {
