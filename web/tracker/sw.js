@@ -72,9 +72,11 @@ self.addEventListener('sync', (e) => {
   if (e.tag === SYNC_TAG) e.waitUntil(drainQueue());
 });
 
+const MAX_RETRIES = 3;
+
 async function drainQueue() {
   const all = await dbGetAll();
-  for (const { id, data } of all) {
+  for (const { id, data, retries = 0 } of all) {
     const url    = data._url;
     const params = { ...data };
     delete params._url;
@@ -85,7 +87,15 @@ async function drainQueue() {
       if (body && body.status === 'error') throw new Error('server error');
       await dbDelete(id);
     } catch (_) {
-      break; // stop on first failure — sync will be retried by the browser
+      if (retries >= MAX_RETRIES) {
+        // Permanently stuck event — skip it and notify the UI, continue with rest
+        const clients = await self.clients.matchAll({ type: 'window' });
+        clients.forEach((c) => c.postMessage({ type: 'SW_QUEUE_ERROR', params }));
+        await dbDelete(id);
+      } else {
+        await dbIncrRetries(id, retries);
+        break; // stop on failure — sync will be retried by the browser
+      }
     }
   }
   const remaining = await dbGetAll();
@@ -120,7 +130,22 @@ async function dbPush(data) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(DB_STORE, 'readwrite');
-    tx.objectStore(DB_STORE).add({ data });
+    tx.objectStore(DB_STORE).add({ data, retries: 0 });
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
+async function dbIncrRetries(id, currentRetries) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx    = db.transaction(DB_STORE, 'readwrite');
+    const store = tx.objectStore(DB_STORE);
+    const req   = store.get(id);
+    req.onsuccess = () => {
+      const entry = req.result;
+      if (entry) store.put({ ...entry, retries: currentRetries + 1 });
+    };
     tx.oncomplete = resolve;
     tx.onerror    = () => reject(tx.error);
   });

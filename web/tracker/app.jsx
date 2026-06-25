@@ -92,6 +92,13 @@ function useEventQueue(scriptUrl) {
       });
   }
 
+  // Show banner if SW failed to register (user falls back to localStorage-only queue)
+  React.useEffect(() => {
+    const onSwRegFailed = () => setStorageError(true);
+    window.addEventListener('jets-sw-reg-failed', onSwRegFailed);
+    return () => window.removeEventListener('jets-sw-reg-failed', onSwRegFailed);
+  }, []);
+
   // App-level listeners — survive all screen changes
   React.useEffect(() => {
     if (!scriptUrl) return;
@@ -325,6 +332,18 @@ function App() {
   const [editingGame,   setEditingGame]  = React.useState(null);
   const [editRoster,    setEditRoster]   = React.useState(null);
   const [showSettings,  setShowSettings] = React.useState(false);
+  const [isOnline,      setIsOnline]     = React.useState(() => navigator.onLine);
+
+  React.useEffect(() => {
+    const onOnline  = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online',  onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online',  onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
 
   const {
     queueSize, swQueueSize, enqueueOrSend, onFlush,
@@ -512,6 +531,7 @@ function App() {
       swQueueSize={swQueueSize}
       stuckQueue={stuckQueue}
       onFlush={onFlush}
+      isOnline={isOnline}
       onBack={() => setScreen('schedule')}
       onRosterChange={(newGoalies, newPlayers) => {
         setActiveGoalies(newGoalies);

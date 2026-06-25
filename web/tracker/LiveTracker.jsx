@@ -211,6 +211,7 @@ function LiveTracker({
   game, goalies, players, allGoalies = [], allPlayers = [],
   scriptUrl, onBack, onEndGame, onRosterChange, initialRoles = {},
   enqueueOrSend, queueSize = 0, swQueueSize = 0, stuckQueue = false, onFlush,
+  isOnline = true,
 }) {
   const scout = localStorage.getItem("jets_scout") || "";
 
@@ -298,7 +299,7 @@ function LiveTracker({
   const [tick, setTick] = React.useState(0);
 
   // Derived countdown values — recomputed from Date.now() each render (iOS-safe)
-  const timerRemaining = timerRunning
+  const timerRemaining = timerRunning && timerStartedAt != null
     ? Math.max(0, timerBaseSecs - Math.floor((Date.now() - timerStartedAt) / 1000))
     : timerBaseSecs;
   const timerIsUrgent = timerRemaining > 0 && timerRemaining <= 180;
@@ -362,11 +363,11 @@ function LiveTracker({
     } catch (_) {}
   }, [periodGoalies]);
 
-  // Show goalie picker when entering a period with no assigned goalie
+  // Show goalie picker when entering a period with no assigned goalie (or after roster change)
   React.useEffect(() => {
     if (liveGoalies.length <= 1) return;
     if (!periodGoalies[period]) setGoalieModal(true);
-  }, [period]);
+  }, [period, liveGoalies, periodGoalies]);
 
   const isGoalie    = (p) => liveGoalies.some((g) => g.id === p?.id);
   const getRole     = (p) => playerRoles[p?.id] || "center";
@@ -407,6 +408,7 @@ function LiveTracker({
   function postEvent(fields) {
     if (!scriptUrl || !enqueueOrSend) return null;
     const params = {
+      idempotency_key: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random()),
       game_id:    game.id       || "",
       game_date:  game.date     || "",
       game_start: game.time     || "",
@@ -627,6 +629,19 @@ function LiveTracker({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
             <ScoreDisplay us={score.us} them={score.them} />
+            {!isOnline && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: "0.2rem",
+                background: "rgba(239,68,68,.15)", border: "1px solid rgba(239,68,68,.4)",
+                borderRadius: "var(--radius-pill)",
+                padding: "2px 7px", fontSize: "0.6rem", fontWeight: 700,
+                color: "#fca5a5", letterSpacing: "0.06em", textTransform: "uppercase",
+                flexShrink: 0,
+              }}>
+                <Icon name="wifi-off" size={9} color="#fca5a5" strokeWidth={2.5} />
+                Offline
+              </span>
+            )}
             {(queueSize + swQueueSize) > 0 && (
               <IconBtn name="wifi-off" label={`${queueSize + swQueueSize} ausstehend`}
                 badge={queueSize + swQueueSize} danger={stuckQueue}

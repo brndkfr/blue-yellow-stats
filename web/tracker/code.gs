@@ -20,7 +20,7 @@
  *  5. Paste the deployment URL into web/tracker/config.js → scriptUrl.
  */
 
-const VERSION           = 'v29';
+const VERSION           = 'v30';
 
 const EVENTS_SHEET      = 'Events';
 const GAMES_SHEET       = 'Games';
@@ -87,7 +87,7 @@ function _ensureEventsHeader(sheet) {
     'action',
     'assist_id', 'assist_nr', 'assist_name',
     'power_play', 'reason',
-    'scout', 'note', 'was_queued', 'received_at',
+    'scout', 'note', 'was_queued', 'received_at', 'idempotency_key',
   ]);
 }
 
@@ -251,16 +251,21 @@ function _createGameQuerySheet(ss, gameId, displayName) {
 // ---------------------------------------------------------------------------
 
 function doPost(e) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
-  const p     = e.parameter;
-  const props = PropertiesService.getScriptProperties(); // one call for all handlers
+  try {
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const p     = e.parameter;
+    const props = PropertiesService.getScriptProperties();
 
-  switch (p.action_type) {
-    case 'saveGame':       return _handleSaveGame(ss, p, props);
-    case 'saveGameRoster': return _handleSaveGameRoster(ss, p);
-    case 'saveSquadPlayer':return _handleSaveSquadPlayer(ss, p);
-    case 'deleteEvent':    return _handleDeleteEvent(ss, p);
-    default:               return _handleEvent(ss, p, props);
+    switch (p.action_type) {
+      case 'saveGame':       return _handleSaveGame(ss, p, props);
+      case 'saveGameRoster': return _handleSaveGameRoster(ss, p);
+      case 'saveSquadPlayer':return _handleSaveSquadPlayer(ss, p);
+      case 'deleteEvent':    return _handleDeleteEvent(ss, p);
+      default:               return _handleEvent(ss, p, props);
+    }
+  } catch (err) {
+    Logger.log('doPost error: ' + err + ' | params: ' + JSON.stringify(e && e.parameter));
+    return _json({ status: 'error', message: String(err) });
   }
 }
 
@@ -281,30 +286,41 @@ function _handleEvent(ss, p, props) {
     headers = evSh.getRange(1, 1, 1, evSh.getLastColumn()).getValues()[0];
   }
 
+  // Idempotency: skip duplicate events (retries after network errors)
+  const iKey = p.idempotency_key || '';
+  if (iKey) {
+    const ikIdx = headers.indexOf('idempotency_key');
+    if (ikIdx !== -1 && evSh.getLastRow() > 1) {
+      const ikVals = evSh.getRange(2, ikIdx + 1, evSh.getLastRow() - 1, 1).getValues().flat();
+      if (ikVals.indexOf(iKey) !== -1) return _json({ status: 'ok', duplicate: true });
+    }
+  }
+
   const data = {
-    game_id:     p.game_id       || '',
-    game_date:   p.game_date     || '',
-    game_start:  p.game_start    || '',
-    opponent:    p.opponent      || '',
-    type:        p.type          || '',
-    venue:       p.venue         || '',
-    home:        p.home          || '',
-    period:      Number(p.period)    || 0,
-    timestamp:   p.timestamp    || '',
-    player_id:   p.player_id    || '',
-    player_nr:   Number(p.player_nr) || 0,
-    player_name: p.player_name  || '',
-    player_role: p.player_role  || '',
-    action:      p.action       || '',
-    assist_id:   p.assist_id    || '',
-    assist_nr:   Number(p.assist_nr) || '',
-    assist_name: p.assist_name  || '',
-    power_play:  p.power_play   || '',
-    reason:      p.reason       || '',
-    scout:       p.scout        || '',
-    note:        p.note         || '',
-    was_queued:  p.was_queued   || '',
-    received_at: new Date(),
+    game_id:          p.game_id       || '',
+    game_date:        p.game_date     || '',
+    game_start:       p.game_start    || '',
+    opponent:         p.opponent      || '',
+    type:             p.type          || '',
+    venue:            p.venue         || '',
+    home:             p.home          || '',
+    period:           Number(p.period)    || 0,
+    timestamp:        p.timestamp    || '',
+    player_id:        p.player_id    || '',
+    player_nr:        Number(p.player_nr) || 0,
+    player_name:      p.player_name  || '',
+    player_role:      p.player_role  || '',
+    action:           p.action       || '',
+    assist_id:        p.assist_id    || '',
+    assist_nr:        Number(p.assist_nr) || '',
+    assist_name:      p.assist_name  || '',
+    power_play:       p.power_play   || '',
+    reason:           p.reason       || '',
+    scout:            p.scout        || '',
+    note:             p.note         || '',
+    was_queued:       p.was_queued   || '',
+    received_at:      new Date(),
+    idempotency_key:  iKey,
   };
   evSh.appendRow(headers.map(function(h) { return h in data ? data[h] : ''; }));
 
