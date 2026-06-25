@@ -575,7 +575,7 @@ function LiveTracker({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: 1 }}>
             <IconBtn name="chevron-left" label="Zurück zu Spielen" onClick={() => {
-              if (game.id && (score.us + score.them > 0 || lastEvent !== null)) {
+              if (game.id && (score.us + score.them > 0 || eventLog.length > 0)) {
                 setConfirmLeave(true);
               } else {
                 onBack();
