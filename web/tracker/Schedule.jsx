@@ -18,7 +18,7 @@ function ScheduleHeader({ onNewGame, onSettings }) {
       {/* Wordmark */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
         <img
-          src="https://upload.wikimedia.org/wikipedia/commons/8/8f/Logo-kloten-dietlikon-jets.svg"
+          src="./icons/jets-logo.svg"
           alt="Jets"
           style={{ width: "2.25rem", height: "2.25rem", flexShrink: 0 }}
         />

@@ -9,13 +9,13 @@
   "theme_color": "#0033a0",
   "icons": [
     {
-      "src": "./icons/icon.svg",
+      "src": "./icons/jets-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "./icons/icon.svg",
+      "src": "./icons/jets-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
