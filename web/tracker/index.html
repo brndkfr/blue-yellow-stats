@@ -61,7 +61,7 @@
 
   /* ── Phone frame ── */
   .phone {
-    width: 390px; max-width: calc(100vw - 40px); height: 760px; position: relative; overflow: hidden;
+    width: 390px; max-width: calc(100vw - 40px); height: min(760px, calc(100svh - 48px)); position: relative; overflow: hidden;
     border-radius: 44px; background: var(--bg-app);
     box-shadow: 0 0 0 11px #0b0e16, 0 0 0 13px #20242e, 0 40px 80px -24px rgba(0,0,0,.85);
     flex-shrink: 0;
@@ -69,6 +69,21 @@
   .screen { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .screen::-webkit-scrollbar { width: 0; }
   .screen { scrollbar-width: none; }
+
+  /* Spinner for LoadingScreen */
+  @keyframes jets-spin { to { transform: rotate(360deg); } }
+
+  /* On narrow/short screens: fill viewport, drop decorative phone chrome */
+  @media (max-width: 500px), (max-height: 820px) {
+    .stage { padding: 0; align-items: stretch; justify-content: flex-start; gap: 0; }
+    #scout-bar { padding: 8px 12px; }
+    .phone {
+      width: 100%; max-width: 100%;
+      height: calc(100dvh - 48px);
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
 </style>
 <script src="./config.js"></script>
 <script>

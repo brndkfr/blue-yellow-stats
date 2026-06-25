@@ -164,7 +164,7 @@ function ConfigScreen({ onSave }) {
   function handleSave() {
     const trimmed = url.trim();
     if (!trimmed.startsWith('https://')) {
-      setError('Please enter a valid https:// URL.');
+      setError('Bitte eine gültige https:// URL eingeben.');
       return;
     }
     onSave(trimmed);
@@ -187,10 +187,10 @@ function ConfigScreen({ onSave }) {
           <Icon name="link" size={22} color="#93c5fd" />
         </div>
         <h1 style={{ margin: '0 0 0.4rem', fontSize: '1.25rem', fontWeight: 800 }}>
-          Connect Google Sheet
+          Google Sheet verbinden
         </h1>
         <p style={{ margin: 0, fontSize: '0.875rem', color: 'rgba(255,255,255,.45)', lineHeight: 1.5 }}>
-          Paste the Apps Script deployment URL to load squad and games data.
+          Apps Script URL einfügen um Kader und Spielplan zu laden.
         </p>
       </div>
 
@@ -216,7 +216,7 @@ function ConfigScreen({ onSave }) {
       </div>
 
       <Button variant="primary" size="lg" fullWidth icon="check" onClick={handleSave}>
-        Save &amp; Connect
+        Speichern &amp; verbinden
       </Button>
     </div>
   );
@@ -235,9 +235,10 @@ function LoadingScreen({ message }) {
       alignItems: 'center', justifyContent: 'center',
       gap: '1rem',
     }}>
-      <Icon name="loader" size={28} color="rgba(255,255,255,.3)" />
+      <Icon name="loader" size={28} color="rgba(255,255,255,.3)"
+        style={{ animation: 'jets-spin 0.9s linear infinite' }} />
       <p style={{ margin: 0, fontSize: '0.875rem', color: 'rgba(255,255,255,.4)' }}>
-        {message || 'Loading…'}
+        {message || 'Wird geladen…'}
       </p>
     </div>
   );
@@ -475,7 +476,7 @@ function App() {
 
   // Config + loading: no events can be queued yet, early return is safe
   if (!scriptUrl) return <ConfigScreen onSave={handleConfigSave} />;
-  if (loading)    return <LoadingScreen message="Loading squad and games…" />;
+  if (loading)    return <LoadingScreen message="Kader und Spielplan werden geladen…" />;
 
   // Compute active screen content — always wrapped in root div so banner is visible everywhere
   let screenContent;
@@ -489,11 +490,11 @@ function App() {
         padding: '2rem', gap: '1rem', textAlign: 'center',
       }}>
         <Icon name="wifi-off" size={32} color="#f87171" />
-        <p style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600 }}>Connection failed</p>
+        <p style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600 }}>Verbindung fehlgeschlagen</p>
         <p style={{ margin: 0, fontSize: '0.8125rem', color: 'rgba(255,255,255,.4)' }}>{loadError}</p>
         <Button variant="secondary" size="md" icon="refresh-cw"
           onClick={() => setRefreshKey((k) => k + 1)}>
-          Retry
+          Erneut versuchen
         </Button>
         <button
           onClick={() => { _clearAllCaches(); localStorage.removeItem(LS_KEY_URL); setScriptUrl(''); }}
@@ -502,7 +503,7 @@ function App() {
             color: 'rgba(255,255,255,.3)', fontSize: '0.75rem', cursor: 'pointer',
             fontFamily: 'var(--font-sans)',
           }}>
-          Change URL
+          URL ändern
         </button>
       </div>
     );

@@ -32,6 +32,10 @@ const GEGENGOAL_REASONS = [
   { code: "free_shot",    label: "Freier Schuss",   icon: "crosshair",    tint: "yellow"  },
 ];
 
+function haptic(pattern) {
+  try { navigator.vibrate?.(pattern); } catch (_) {}
+}
+
 /* Shared navy chrome background used for header + bars */
 const CHROME_BG     = "rgba(1,9,35,.95)";
 const CHROME_BORDER = "1px solid rgba(255,255,255,.08)";
@@ -100,7 +104,7 @@ function ScoreDisplay({ us, them }) {
       padding: "0.3rem 0.85rem",
     }}>
       <span style={{
-        fontWeight: 900, fontSize: "1.375rem", lineHeight: 1,
+        fontWeight: 900, fontSize: "1.5rem", lineHeight: 1,
         color: "#fff", fontVariantNumeric: "tabular-nums",
       }}>{us}</span>
       <span style={{ color: "rgba(255,255,255,.22)", fontSize: "1rem", lineHeight: 1 }}>–</span>
@@ -165,45 +169,6 @@ function LTBoxPlayPanel({ mode, remaining, onResolve }) {
         </>)}
       </div>
     </div>
-  );
-}
-
-function LTStrafeSheet({ onGegentor, onBoxPlay, onPowerPlay, onClose }) {
-  const ltRowStyle = { appearance: "none", cursor: "pointer", touchAction: "manipulation", display: "flex", alignItems: "center", gap: "0.85rem", borderRadius: "var(--radius-xl)", padding: "0.85rem 1rem", fontFamily: "var(--font-sans)", textAlign: "left", width: "100%" };
-  return (
-    <>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.65)", zIndex: 45, backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }} />
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 55, background: "#0b1120", border: "1px solid rgba(255,255,255,.09)", borderBottom: "none", borderRadius: "var(--radius-2xl) var(--radius-2xl) 0 0", padding: "0.75rem 0.85rem 1rem", display: "flex", flexDirection: "column", gap: "0.5rem", boxShadow: "0 -16px 48px rgba(0,0,0,.6)" }}>
-        <div style={{ width: "2rem", height: "3px", background: "rgba(255,255,255,.15)", borderRadius: "2px", margin: "0 auto 0.25rem" }} />
-        <button onClick={onGegentor} style={{ ...ltRowStyle, background: "rgba(185,28,28,.12)", border: "1px solid rgba(220,38,38,.28)" }}>
-          <span style={{ display: "grid", placeItems: "center", width: "2.25rem", height: "2.25rem", borderRadius: "var(--radius-lg)", background: "rgba(185,28,28,.2)", flexShrink: 0 }}>
-            <Icon name="circle-x" size={18} color="#fca5a5" strokeWidth={2} />
-          </span>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9375rem", color: "#fff" }}>Gegentor</p>
-            <p style={{ margin: "0.1rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,.35)" }}>Gegner hat ein Tor erzielt</p>
-          </div>
-        </button>
-        <button onClick={onBoxPlay} style={{ ...ltRowStyle, background: "rgba(220,38,38,.1)", border: "1px solid rgba(239,68,68,.22)" }}>
-          <span style={{ display: "grid", placeItems: "center", width: "2.25rem", height: "2.25rem", borderRadius: "var(--radius-lg)", background: "rgba(239,68,68,.18)", flexShrink: 0 }}>
-            <Icon name="shield-off" size={18} color="#f87171" strokeWidth={2} />
-          </span>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9375rem", color: "#fff" }}>BoxPlay</p>
-            <p style={{ margin: "0.1rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,.35)" }}>Jets in Unterzahl — 2 Min.</p>
-          </div>
-        </button>
-        <button onClick={onPowerPlay} style={{ ...ltRowStyle, background: "rgba(255,205,0,.07)", border: "1px solid rgba(255,205,0,.2)" }}>
-          <span style={{ display: "grid", placeItems: "center", width: "2.25rem", height: "2.25rem", borderRadius: "var(--radius-lg)", background: "rgba(255,205,0,.1)", flexShrink: 0 }}>
-            <Icon name="shield-plus" size={18} color="#ffcd00" strokeWidth={2} />
-          </span>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9375rem", color: "#fff" }}>Powerplay</p>
-            <p style={{ margin: "0.1rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,.35)" }}>Jets in Überzahl — 2 Min.</p>
-          </div>
-        </button>
-      </div>
-    </>
   );
 }
 
@@ -435,7 +400,7 @@ function LiveTracker({
       action:      a.code,
     });
     const t = { icon: "check", tone: "info", text: `${a.label} — ${active.nr ? "#" + active.nr + " " : ""}${active.name}` };
-    pushEvent(t, params, null); fireToast(t); setActive(null);
+    haptic(30); pushEvent(t, params, null); fireToast(t); setActive(null);
   }
   function startGoal() { setAssistFor(active); setActive(null); }
   function pickAssist(p) {
@@ -463,6 +428,7 @@ function LiveTracker({
       power_play:  powerPlay ? "yes" : "",
     });
     const t = { icon: "goal", tone: "success", text };
+    haptic([50, 20, 50]);
     pushEvent(t, params, 'us');
     setScore((s) => ({ ...s, us: s.us + 1 }));
     fireToast(t); setAssistFor(null); setPowerPlay(false);
@@ -476,6 +442,7 @@ function LiveTracker({
       reason:      r ? r.code : "",
     });
     const t = { icon: "shield-off", tone: "pending", text: `Gegengoal${r ? ` · ${r.label}` : ""}` };
+    haptic(80);
     pushEvent(t, params, 'them');
     setScore((s) => ({ ...s, them: s.them + 1 }));
     fireToast(t); setGegengoal(false);
@@ -504,6 +471,7 @@ function LiveTracker({
   function undo() { deleteEventEntry(0); }
 
   function resolveBoxPlay(type) {
+    haptic(30);
     const msgs = {
       killed:   { icon: "shield-check", tone: "success", text: "Box gekilled!" },
       conceded: { icon: "circle-x",     tone: "pending", text: "Unterzahltor kassiert" },
@@ -831,7 +799,10 @@ function LiveTracker({
         </Button>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
           <button
-            onClick={() => boxPlay ? null : setBoxPlay({ mode: "box", startedAt: Date.now(), totalSecs: 120 })}
+            onClick={() => {
+              if (boxPlay) { fireToast({ icon: "shield-off", tone: "info", text: "Erst aktive Strafe auflösen" }); return; }
+              setBoxPlay({ mode: "box", startedAt: Date.now(), totalSecs: 120 });
+            }}
             style={{
               appearance: "none", cursor: boxPlay?.mode === "box" ? "default" : "pointer",
               minHeight: "2.75rem", borderRadius: "var(--radius-lg)",
@@ -847,7 +818,10 @@ function LiveTracker({
             BoxPlay
           </button>
           <button
-            onClick={() => boxPlay ? null : setBoxPlay({ mode: "power", startedAt: Date.now(), totalSecs: 120 })}
+            onClick={() => {
+              if (boxPlay) { fireToast({ icon: "shield-plus", tone: "info", text: "Erst aktive Strafe auflösen" }); return; }
+              setBoxPlay({ mode: "power", startedAt: Date.now(), totalSecs: 120 });
+            }}
             style={{
               appearance: "none", cursor: boxPlay?.mode === "power" ? "default" : "pointer",
               minHeight: "2.75rem", borderRadius: "var(--radius-lg)",
@@ -1032,10 +1006,12 @@ function LiveTracker({
             <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem",
               fontSize: "0.875rem", color: "rgba(255,255,255,.65)" }}>
               {[
-                ["list-checks", "Spieler antippen",      "Spieler oder Goalie antippen — ein Panel mit den passenden Aktionen öffnet sich."],
-                ["target",      "Aktion wählen",         "Im Panel die Aktion tippen — wird sofort gesendet und das Panel schliesst sich."],
-                ["goal",        "Goal erfassen",         "Torschützen antippen → Goal → Assistspieler antippen oder «Kein Assist»."],
-                ["wifi-off",    "Kein Netz? Kein Stress.","Einträge werden lokal gespeichert und gesendet sobald wieder Verbindung besteht."],
+                ["list-checks",  "Spieler antippen",         "Spieler oder Goalie antippen — ein Panel mit den passenden Aktionen öffnet sich."],
+                ["target",       "Aktion wählen",            "Im Panel die Aktion tippen — wird sofort gesendet und das Panel schliesst sich."],
+                ["goal",         "Goal erfassen",            "Torschützen antippen → Goal → Assistspieler antippen oder «Kein Assist»."],
+                ["shield-check", "Doppeltippen: Goalie",     "Goalie doppeltippen → sofortige Parade ohne Panel."],
+                ["zap",          "Doppeltippen: Feldspieler","Feldspieler doppeltippen → sofort in den Goal-Flow."],
+                ["wifi-off",     "Kein Netz? Kein Stress.",  "Einträge werden lokal gespeichert und gesendet sobald wieder Verbindung besteht."],
               ].map(([ic, title, desc]) => (
                 <div key={ic} style={{ display: "flex", gap: "0.75rem" }}>
                   <span style={{
